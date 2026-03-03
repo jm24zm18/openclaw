@@ -3,10 +3,17 @@ import { findRoutedCommand } from "./routes.js";
 
 const runConfigGetMock = vi.hoisted(() => vi.fn(async () => {}));
 const runConfigUnsetMock = vi.hoisted(() => vi.fn(async () => {}));
+const modelsListCommandMock = vi.hoisted(() => vi.fn(async () => {}));
+const modelsStatusCommandMock = vi.hoisted(() => vi.fn(async () => {}));
 
 vi.mock("../config-cli.js", () => ({
   runConfigGet: runConfigGetMock,
   runConfigUnset: runConfigUnsetMock,
+}));
+
+vi.mock("../../commands/models.js", () => ({
+  modelsListCommand: modelsListCommandMock,
+  modelsStatusCommand: modelsStatusCommandMock,
 }));
 
 describe("program routes", () => {
@@ -130,6 +137,41 @@ describe("program routes", () => {
     await expectRunFalse(
       ["models", "status"],
       ["node", "openclaw", "models", "status", "--probe-profile"],
+    );
+  });
+
+  it("accepts negative-number probe profile values", async () => {
+    const route = expectRoute(["models", "status"]);
+    await expect(
+      route?.run([
+        "node",
+        "openclaw",
+        "models",
+        "status",
+        "--probe-provider",
+        "openai",
+        "--probe-timeout",
+        "5000",
+        "--probe-concurrency",
+        "2",
+        "--probe-max-tokens",
+        "64",
+        "--probe-profile",
+        "-1",
+        "--agent",
+        "default",
+      ]),
+    ).resolves.toBe(true);
+    expect(modelsStatusCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        probeProvider: "openai",
+        probeTimeout: "5000",
+        probeConcurrency: "2",
+        probeMaxTokens: "64",
+        probeProfile: "-1",
+        agent: "default",
+      }),
+      expect.any(Object),
     );
   });
 });

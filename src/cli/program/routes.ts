@@ -1,4 +1,4 @@
-import { consumeRootOptionToken } from "../../infra/cli-root-options.js";
+import { consumeRootOptionToken, isValueToken } from "../../infra/cli-root-options.js";
 import { defaultRuntime } from "../../runtime.js";
 import { getFlagValue, getPositiveIntFlagValue, getVerboseFlag, hasFlag } from "../argv.js";
 
@@ -135,7 +135,7 @@ function getFlagValues(argv: string[], name: string): string[] | null {
     }
     if (arg === name) {
       const next = args[i + 1];
-      if (!next || next === "--" || next.startsWith("-")) {
+      if (!isValueToken(next)) {
         return null;
       }
       values.push(next);
