@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { MAX_PREAUTH_PAYLOAD_BYTES } from "./server-constants.js";
+import { DEFAULT_HANDSHAKE_TIMEOUT_MS, MAX_PREAUTH_PAYLOAD_BYTES } from "./server-constants.js";
 import { createGatewaySuiteHarness, readConnectChallengeNonce } from "./test-helpers.server.js";
 
 let cleanupEnv: Array<() => void> = [];
@@ -33,8 +33,8 @@ describe("gateway pre-auth hardening", () => {
         });
       });
       expect(close.code).toBe(1000);
-      expect(close.elapsedMs).toBeGreaterThan(0);
-      expect(close.elapsedMs).toBeLessThan(1_000);
+      expect(close.elapsedMs).toBeGreaterThanOrEqual(150);
+      expect(close.elapsedMs).toBeLessThan(DEFAULT_HANDSHAKE_TIMEOUT_MS);
     } finally {
       await harness.close();
     }
@@ -70,6 +70,7 @@ describe("gateway pre-auth hardening", () => {
 
       const result = await closed;
       expect(result.code).toBe(1009);
+      expect(result.reason).toContain("preauth payload too large");
     } finally {
       await harness.close();
     }
