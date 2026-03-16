@@ -78,7 +78,11 @@ export async function runProviderPluginAuthMethod(params: {
   secretInputMode?: OnboardOptions["secretInputMode"];
   allowSecretRefPrompt?: boolean;
   opts?: Partial<OnboardOptions>;
-}): Promise<{ config: ApplyAuthChoiceParams["config"]; defaultModel?: string }> {
+}): Promise<{
+  config: ApplyAuthChoiceParams["config"];
+  defaultModel?: string;
+  profileCount: number;
+}> {
   const agentId = params.agentId ?? resolveDefaultAgentId(params.config);
   const defaultAgentId = resolveDefaultAgentId(params.config);
   const agentDir =
@@ -139,6 +143,7 @@ export async function runProviderPluginAuthMethod(params: {
   return {
     config: nextConfig,
     defaultModel: result.defaultModel,
+    profileCount: result.profiles.length,
   };
 }
 

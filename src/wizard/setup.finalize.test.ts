@@ -316,7 +316,7 @@ describe("finalizeSetupWizard", () => {
       confirm: vi.fn(async () => false),
     });
 
-    await finalizeOnboardingWizard({
+    await finalizeSetupWizard({
       flow: "advanced",
       opts: {
         acceptRisk: true,
