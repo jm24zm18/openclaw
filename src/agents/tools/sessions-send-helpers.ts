@@ -1,3 +1,4 @@
+import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import {
   getChannelPlugin,
   normalizeChannelId as normalizeAnyChannelId,
@@ -145,11 +146,13 @@ export function buildAgentToAgentAnnounceContext(params: {
 }
 
 export function isAnnounceSkip(text?: string) {
-  return (text ?? "").trim() === ANNOUNCE_SKIP_TOKEN;
+  const trimmed = (text ?? "").trim();
+  return trimmed === ANNOUNCE_SKIP_TOKEN || isSilentReplyText(trimmed, SILENT_REPLY_TOKEN);
 }
 
 export function isReplySkip(text?: string) {
-  return (text ?? "").trim() === REPLY_SKIP_TOKEN;
+  const trimmed = (text ?? "").trim();
+  return trimmed === REPLY_SKIP_TOKEN || isSilentReplyText(trimmed, SILENT_REPLY_TOKEN);
 }
 
 export function resolvePingPongTurns(cfg?: OpenClawConfig) {
