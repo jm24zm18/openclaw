@@ -265,7 +265,9 @@ describe("plugin-sdk subpath exports", () => {
 
   it("exports Discord helpers", () => {
     expect(typeof discordSdk.buildChannelConfigSchema).toBe("function");
+    expect(typeof discordSdk.createDiscordActionGate).toBe("function");
     expect(typeof discordSdk.DiscordConfigSchema).toBe("object");
+    expect(typeof discordSdk.discordMessageActions).toBe("object");
     expect(typeof discordSdk.listDiscordDirectoryGroupsFromConfig).toBe("function");
     expect(typeof discordSdk.listDiscordDirectoryPeersFromConfig).toBe("function");
     expect(typeof discordSdk.listDiscordDirectoryGroupsLive).toBe("function");
