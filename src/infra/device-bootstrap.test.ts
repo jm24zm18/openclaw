@@ -6,6 +6,7 @@ import {
   clearDeviceBootstrapTokens,
   DEVICE_BOOTSTRAP_TOKEN_TTL_MS,
   issueDeviceBootstrapToken,
+  revokeDeviceBootstrapToken,
   verifyDeviceBootstrapToken,
 } from "./device-bootstrap.js";
 
@@ -102,6 +103,73 @@ describe("device bootstrap tokens", () => {
         baseDir,
       }),
     ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+  });
+
+  it("revokes a specific bootstrap token", async () => {
+    const baseDir = await createTempDir();
+    const first = await issueDeviceBootstrapToken({ baseDir });
+    const second = await issueDeviceBootstrapToken({ baseDir });
+
+    await expect(revokeDeviceBootstrapToken({ baseDir, token: first.token })).resolves.toEqual({
+      removed: true,
+    });
+
+    await expect(
+      verifyDeviceBootstrapToken({
+        token: first.token,
+        deviceId: "device-123",
+        publicKey: "public-key-123",
+        role: "operator.admin",
+        scopes: ["operator.admin"],
+        baseDir,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+
+    await expect(
+      verifyDeviceBootstrapToken({
+        token: second.token,
+        deviceId: "device-123",
+        publicKey: "public-key-123",
+        role: "operator.admin",
+        scopes: ["operator.admin"],
+        baseDir,
+      }),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("consumes bootstrap tokens by the persisted map key", async () => {
+    const baseDir = await createTempDir();
+    const issued = await issueDeviceBootstrapToken({ baseDir });
+    const issuedAtMs = Date.now();
+    const bootstrapPath = path.join(baseDir, "devices", "bootstrap.json");
+    await fs.writeFile(
+      bootstrapPath,
+      JSON.stringify(
+        {
+          "legacy-key": {
+            token: issued.token,
+            ts: issuedAtMs,
+            issuedAtMs,
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await expect(
+      verifyDeviceBootstrapToken({
+        token: issued.token,
+        deviceId: "device-123",
+        publicKey: "public-key-123",
+        role: "operator.admin",
+        scopes: ["operator.admin"],
+        baseDir,
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    await expect(fs.readFile(bootstrapPath, "utf8")).resolves.toBe("{}");
   });
 
   it("keeps the token when required verification fields are blank", async () => {

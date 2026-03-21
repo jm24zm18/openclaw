@@ -315,6 +315,27 @@ public final class OpenClawChatViewModel {
         return [role, timestamp, toolCallId, toolName, contentFingerprint].joined(separator: "|")
     }
 
+    private static func userRefreshIdentityKey(for message: OpenClawChatMessage) -> String? {
+        let role = message.role.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard role == "user" else { return nil }
+
+        let contentFingerprint = message.content.map { item in
+            let type = (item.type ?? "text").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let text = (item.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let id = (item.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = (item.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let fileName = (item.fileName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return [type, text, id, name, fileName].joined(separator: "\\u{001F}")
+        }.joined(separator: "\\u{001E}")
+
+        let toolCallId = (message.toolCallId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let toolName = (message.toolName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if contentFingerprint.isEmpty, toolCallId.isEmpty, toolName.isEmpty {
+            return nil
+        }
+        return [role, toolCallId, toolName, contentFingerprint].joined(separator: "|")
+    }
+
     private static func reconcileMessageIDs(
         previous: [OpenClawChatMessage],
         incoming: [OpenClawChatMessage]) -> [OpenClawChatMessage]
@@ -362,15 +383,21 @@ public final class OpenClawChatViewModel {
 
         var reconciled = Self.reconcileMessageIDs(previous: previous, incoming: incoming)
         let incomingIdentityKeys = Set(reconciled.compactMap(Self.messageIdentityKey(for:)))
+        let incomingUserRefreshKeys = Set(reconciled.compactMap(Self.userRefreshIdentityKey(for:)))
 
         var lastMatchedPreviousIndex: Int?
         for (index, message) in previous.enumerated() {
-            guard let key = Self.messageIdentityKey(for: message),
-                  incomingIdentityKeys.contains(key)
-            else {
+            if let key = Self.messageIdentityKey(for: message),
+               incomingIdentityKeys.contains(key)
+            {
+                lastMatchedPreviousIndex = index
                 continue
             }
-            lastMatchedPreviousIndex = index
+            if let userKey = Self.userRefreshIdentityKey(for: message),
+               incomingUserRefreshKeys.contains(userKey)
+            {
+                lastMatchedPreviousIndex = index
+            }
         }
 
         let trailingUserMessages = (lastMatchedPreviousIndex != nil
@@ -378,8 +405,8 @@ public final class OpenClawChatViewModel {
             : ArraySlice(previous))
             .filter { message in
                 guard message.role.lowercased() == "user" else { return false }
-                guard let key = Self.messageIdentityKey(for: message) else { return false }
-                return !incomingIdentityKeys.contains(key)
+                guard let key = Self.userRefreshIdentityKey(for: message) else { return false }
+                return !incomingUserRefreshKeys.contains(key)
             }
 
         guard !trailingUserMessages.isEmpty else {

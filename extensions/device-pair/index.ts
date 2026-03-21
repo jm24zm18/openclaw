@@ -8,10 +8,10 @@ import {
   issueDeviceBootstrapToken,
   listDevicePairing,
   renderQrPngBase64,
+  revokeDeviceBootstrapToken,
   resolveGatewayBindUrl,
   resolvePreferredOpenClawTmpDir,
   resolveTailnetHostWithRunner,
-  revokeDeviceBootstrapToken,
   runPluginCommandWithTimeout,
   type OpenClawPluginApi,
 } from "./api.js";
@@ -728,7 +728,6 @@ export default definePluginEntry({
               formatSetupReply(payload, authLabel),
           };
         }
-
         const channel = ctx.channel;
         const target = ctx.senderId?.trim() || ctx.from?.trim() || ctx.to?.trim() || "";
         const payload = await issueSetupPayload(urlResult.url);
@@ -769,8 +768,6 @@ export default definePluginEntry({
               )})`,
             );
           }
-        }
-
         return {
           text: formatSetupReply(payload, authLabel),
         };

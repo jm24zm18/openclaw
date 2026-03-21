@@ -92,6 +92,28 @@ export async function clearDeviceBootstrapTokens(
   });
 }
 
+export async function revokeDeviceBootstrapToken(params: {
+  token: string;
+  baseDir?: string;
+}): Promise<{ removed: boolean }> {
+  return await withLock(async () => {
+    const providedToken = params.token.trim();
+    if (!providedToken) {
+      return { removed: false };
+    }
+    const state = await loadState(params.baseDir);
+    const found = Object.entries(state).find(([, candidate]) =>
+      verifyPairingToken(providedToken, candidate.token),
+    );
+    if (!found) {
+      return { removed: false };
+    }
+    delete state[found[0]];
+    await persistState(state, params.baseDir);
+    return { removed: true };
+  });
+}
+
 export async function verifyDeviceBootstrapToken(params: {
   token: string;
   deviceId: string;
@@ -106,12 +128,13 @@ export async function verifyDeviceBootstrapToken(params: {
     if (!providedToken) {
       return { ok: false, reason: "bootstrap_token_invalid" };
     }
-    const entry = Object.values(state).find((candidate) =>
+    const found = Object.entries(state).find(([, candidate]) =>
       verifyPairingToken(providedToken, candidate.token),
     );
-    if (!entry) {
+    if (!found) {
       return { ok: false, reason: "bootstrap_token_invalid" };
     }
+    const [tokenKey] = found;
 
     const deviceId = params.deviceId.trim();
     const publicKey = params.publicKey.trim();
@@ -122,7 +145,7 @@ export async function verifyDeviceBootstrapToken(params: {
 
     // Bootstrap setup codes are single-use. Consume the record before returning
     // success so the same token cannot be replayed to mutate a pending request.
-    delete state[entry.token];
+    delete state[tokenKey];
     await persistState(state, params.baseDir);
     return { ok: true };
   });

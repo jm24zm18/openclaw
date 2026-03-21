@@ -725,7 +725,7 @@ struct OnboardingWizardView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             if self.selectedMode == .remoteDomain {
-                TextField("Gateway Auth Token", text: self.$gatewayToken)
+                SecureField("Gateway Auth Token", text: self.$gatewayToken)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 SecureField("Gateway Password", text: self.$gatewayPassword)

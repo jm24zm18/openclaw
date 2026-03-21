@@ -508,6 +508,53 @@ extension TestChatTransportState {
         }
     }
 
+    @Test func doesNotDuplicateUserMessageWhenRefreshReturnsCanonicalTimestamp() async throws {
+        let sessionId = "sess-main"
+        let now = Date().timeIntervalSince1970 * 1000
+        let history1 = historyPayload(sessionId: sessionId)
+        let history2 = historyPayload(
+            sessionId: sessionId,
+            messages: [
+                chatTextMessage(
+                    role: "user",
+                    text: "hello from mac webchat",
+                    timestamp: now + 5_000),
+                chatTextMessage(
+                    role: "assistant",
+                    text: "final answer",
+                    timestamp: now + 6_000),
+            ])
+
+        let (transport, vm) = await makeViewModel(historyResponses: [history1, history2])
+        try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
+        await sendUserMessage(vm, text: "hello from mac webchat")
+        try await waitUntil("pending run starts") { await MainActor.run { vm.pendingRunCount == 1 } }
+
+        let runId = try #require(await transport.lastSentRunId())
+        transport.emit(
+            .chat(
+                OpenClawChatEventPayload(
+                    runId: runId,
+                    sessionKey: "main",
+                    state: "final",
+                    message: nil,
+                    errorMessage: nil)))
+
+        try await waitUntil("canonical refresh keeps one user message") {
+            await MainActor.run {
+                let userMessages = vm.messages.filter { message in
+                    message.role == "user" &&
+                        message.content.compactMap(\.text).joined(separator: "\n") == "hello from mac webchat"
+                }
+                let hasAssistant = vm.messages.contains { message in
+                    message.role == "assistant" &&
+                        message.content.compactMap(\.text).joined(separator: "\n") == "final answer"
+                }
+                return hasAssistant && userMessages.count == 1
+            }
+        }
+    }
+
     @Test func acceptsCanonicalSessionKeyEventsForOwnPendingRun() async throws {
         let history1 = historyPayload()
         let history2 = historyPayload(
