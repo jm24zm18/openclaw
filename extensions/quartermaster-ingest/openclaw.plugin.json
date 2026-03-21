@@ -1,0 +1,25 @@
+{
+  "id": "quartermaster-ingest",
+  "name": "Quartermaster Ingest",
+  "description": "Optional tool that forwards Quartermaster Telegram intake to the public dashboard API.",
+  "entry": "index.ts",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      },
+      "accountId": {
+        "type": "string"
+      },
+      "timeoutMs": {
+        "type": "number",
+        "minimum": 1
+      }
+    }
+  }
+}
