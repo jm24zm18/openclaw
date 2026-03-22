@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clearInternalHooks,
+  registerInternalHook,
+  type InternalHookEvent,
+} from "../../hooks/internal-hooks.js";
+import type { ApplyLinkUnderstandingResult } from "../../link-understanding/apply.js";
+import type { ApplyMediaUnderstandingResult } from "../../media-understanding/apply.js";
 import type { MsgContext } from "../templating.js";
 import { registerGetReplyCommonMocks } from "./get-reply.test-mocks.js";
 
@@ -12,10 +19,24 @@ const mocks = vi.hoisted(() => ({
 registerGetReplyCommonMocks();
 
 vi.mock("../../link-understanding/apply.js", () => ({
-  applyLinkUnderstanding: vi.fn(async () => undefined),
+  applyLinkUnderstanding: vi.fn(
+    async (): Promise<ApplyLinkUnderstandingResult> => ({
+      outputs: [],
+      urls: [],
+    }),
+  ),
 }));
 vi.mock("../../media-understanding/apply.js", () => ({
-  applyMediaUnderstanding: vi.fn(async () => undefined),
+  applyMediaUnderstanding: vi.fn(
+    async (): Promise<ApplyMediaUnderstandingResult> => ({
+      outputs: [],
+      decisions: [],
+      appliedImage: false,
+      appliedAudio: false,
+      appliedVideo: false,
+      appliedFile: false,
+    }),
+  ),
 }));
 vi.mock("./commands-core.js", () => ({
   emitResetCommandHooks: (...args: unknown[]) => mocks.emitResetCommandHooks(...args),
@@ -30,7 +51,22 @@ vi.mock("./session.js", () => ({
   initSessionState: (...args: unknown[]) => mocks.initSessionState(...args),
 }));
 
+const commandsCoreModule = await import("./commands-core.js");
+const getReplyDirectivesModule = await import("./get-reply-directives.js");
+const getReplyInlineActionsModule = await import("./get-reply-inline-actions.js");
+const getReplyRunModule = await import("./get-reply-run.js");
+const sessionModule = await import("./session.js");
 const { getReplyFromConfig } = await import("./get-reply.js");
+
+async function collectCommandEvents(run: () => Promise<unknown>): Promise<InternalHookEvent[]> {
+  const events: InternalHookEvent[] = [];
+  registerInternalHook("command", (event) => {
+    events.push(event);
+  });
+  await run();
+  await Promise.resolve();
+  return events;
+}
 
 function buildNativeResetContext(): MsgContext {
   return {
@@ -101,6 +137,8 @@ function createContinueDirectivesResult(resetHookTriggered: boolean) {
 
 describe("getReplyFromConfig reset-hook fallback", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    clearInternalHooks();
     mocks.resolveReplyDirectives.mockReset();
     mocks.handleInlineActions.mockReset();
     mocks.emitResetCommandHooks.mockReset();
@@ -126,28 +164,50 @@ describe("getReplyFromConfig reset-hook fallback", () => {
     });
 
     mocks.resolveReplyDirectives.mockResolvedValue(createContinueDirectivesResult(false));
+
+    vi.spyOn(commandsCoreModule, "emitResetCommandHooks").mockImplementation(
+      mocks.emitResetCommandHooks,
+    );
+    vi.spyOn(getReplyDirectivesModule, "resolveReplyDirectives").mockImplementation(
+      mocks.resolveReplyDirectives,
+    );
+    vi.spyOn(getReplyInlineActionsModule, "handleInlineActions").mockImplementation(
+      mocks.handleInlineActions,
+    );
+    vi.spyOn(getReplyRunModule, "runPreparedReply").mockResolvedValue(undefined);
+    vi.spyOn(sessionModule, "initSessionState").mockImplementation(mocks.initSessionState);
   });
 
   it("emits reset hooks when inline actions return early without marking resetHookTriggered", async () => {
     mocks.handleInlineActions.mockResolvedValue({ kind: "reply", reply: undefined });
 
-    await getReplyFromConfig(buildNativeResetContext(), undefined, {});
+    const events = await collectCommandEvents(() =>
+      getReplyFromConfig(buildNativeResetContext(), undefined, {}),
+    );
 
-    expect(mocks.emitResetCommandHooks).toHaveBeenCalledTimes(1);
-    expect(mocks.emitResetCommandHooks).toHaveBeenCalledWith(
+    expect(events).toEqual([
       expect.objectContaining({
+        type: "command",
         action: "new",
         sessionKey: "agent:main:telegram:direct:123",
       }),
-    );
+    ]);
   });
 
   it("does not emit fallback hooks when resetHookTriggered is already set", async () => {
     mocks.handleInlineActions.mockResolvedValue({ kind: "reply", reply: undefined });
     mocks.resolveReplyDirectives.mockResolvedValue(createContinueDirectivesResult(true));
 
-    await getReplyFromConfig(buildNativeResetContext(), undefined, {});
+    const events = await collectCommandEvents(() =>
+      getReplyFromConfig(buildNativeResetContext(), undefined, {}),
+    );
 
-    expect(mocks.emitResetCommandHooks).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: "command",
+        action: "new",
+        sessionKey: "agent:main:telegram:direct:123",
+      }),
+    ]);
   });
 });

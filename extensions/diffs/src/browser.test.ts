@@ -8,7 +8,7 @@ const { launchMock } = vi.hoisted(() => ({
   launchMock: vi.fn(),
 }));
 
-vi.mock("playwright-core", () => ({
+vi.mock("../../../src/browser/automation.js", () => ({
   chromium: {
     launch: launchMock,
   },

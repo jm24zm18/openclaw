@@ -29,7 +29,13 @@ import { getAgentScopedMediaLocalRoots } from "../../media/local-roots.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { throwIfAborted } from "./abort.js";
 import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
-import { ackDelivery, enqueueDelivery, failDelivery } from "./delivery-queue.js";
+import {
+  ackDelivery,
+  enqueueDelivery,
+  failDelivery,
+  MediaDeliveryPreparationError,
+  preparePayloadsForDelivery,
+} from "./delivery-queue.js";
 import type { OutboundIdentity } from "./identity.js";
 import type { DeliveryMirror } from "./mirror.js";
 import type { NormalizedOutboundPayload } from "./payloads.js";
@@ -269,6 +275,7 @@ type DeliverOutboundPayloadsCoreParams = {
 export type DeliverOutboundPayloadsParams = DeliverOutboundPayloadsCoreParams & {
   /** @internal Skip write-ahead queue (used by crash-recovery to avoid re-enqueueing). */
   skipQueue?: boolean;
+  stateDir?: string;
 };
 
 type MessageSentEvent = {
@@ -480,23 +487,32 @@ export async function deliverOutboundPayloads(
   params: DeliverOutboundPayloadsParams,
 ): Promise<OutboundDeliveryResult[]> {
   const { channel, to, payloads } = params;
+  const preparedPayloads = await preparePayloadsForDelivery(payloads, params.stateDir);
 
   // Write-ahead delivery queue: persist before sending, remove after success.
   const queueId = params.skipQueue
     ? null
-    : await enqueueDelivery({
-        channel,
-        to,
-        accountId: params.accountId,
-        payloads,
-        threadId: params.threadId,
-        replyToId: params.replyToId,
-        bestEffort: params.bestEffort,
-        gifPlayback: params.gifPlayback,
-        forceDocument: params.forceDocument,
-        silent: params.silent,
-        mirror: params.mirror,
-      }).catch(() => null); // Best-effort — don't block delivery if queue write fails.
+    : await enqueueDelivery(
+        {
+          channel,
+          to,
+          accountId: params.accountId,
+          payloads: preparedPayloads,
+          threadId: params.threadId,
+          replyToId: params.replyToId,
+          bestEffort: params.bestEffort,
+          gifPlayback: params.gifPlayback,
+          forceDocument: params.forceDocument,
+          silent: params.silent,
+          mirror: params.mirror,
+        },
+        params.stateDir,
+      ).catch((err) => {
+        if (err instanceof MediaDeliveryPreparationError) {
+          throw err;
+        }
+        return null;
+      }); // Best-effort — don't block delivery if queue write fails.
 
   // Wrap onError to detect partial failures under bestEffort mode.
   // When bestEffort is true, per-payload errors are caught and passed to onError
@@ -514,23 +530,30 @@ export async function deliverOutboundPayloads(
     : params;
 
   try {
-    const results = await deliverOutboundPayloadsCore(wrappedParams);
+    const results = await deliverOutboundPayloadsCore({
+      ...wrappedParams,
+      payloads: preparedPayloads,
+    });
     if (queueId) {
       if (hadPartialFailure) {
-        await failDelivery(queueId, "partial delivery failure (bestEffort)").catch(() => {});
+        await failDelivery(queueId, "partial delivery failure (bestEffort)", params.stateDir).catch(
+          () => {},
+        );
       } else {
-        await ackDelivery(queueId).catch(() => {}); // Best-effort cleanup.
+        await ackDelivery(queueId, params.stateDir).catch(() => {}); // Best-effort cleanup.
       }
     }
     return results;
   } catch (err) {
     if (queueId) {
       if (isAbortError(err)) {
-        await ackDelivery(queueId).catch(() => {});
+        await ackDelivery(queueId, params.stateDir).catch(() => {});
       } else {
-        await failDelivery(queueId, err instanceof Error ? err.message : String(err)).catch(
-          () => {},
-        );
+        await failDelivery(
+          queueId,
+          err instanceof Error ? err.message : String(err),
+          params.stateDir,
+        ).catch(() => {});
       }
     }
     throw err;

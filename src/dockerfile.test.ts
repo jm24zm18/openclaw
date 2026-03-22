@@ -32,7 +32,7 @@ describe("Dockerfile", () => {
     expect(browserArgIndex).toBeGreaterThan(-1);
     expect(browserArgIndex).toBeGreaterThan(installIndex);
     expect(dockerfile).toContain(
-      "node /app/node_modules/playwright-core/cli.js install --with-deps chromium",
+      "node /app/node_modules/patchright/cli.js install --with-deps chromium",
     );
     expect(dockerfile).toContain("apt-get install -y --no-install-recommends xvfb");
   });

@@ -21,7 +21,11 @@ import {
   resolveVisibleSessionReference,
   stripToolMessages,
 } from "./sessions-helpers.js";
-import { buildAgentToAgentMessageContext, resolvePingPongTurns } from "./sessions-send-helpers.js";
+import {
+  buildAgentToAgentMessageContext,
+  resolvePingPongTurns,
+  resolveRequireAnnounce,
+} from "./sessions-send-helpers.js";
 import { runSessionsSendA2AFlow } from "./sessions-send-tool.a2a.js";
 
 const SessionsSendToolSchema = Type.Object({
@@ -30,6 +34,7 @@ const SessionsSendToolSchema = Type.Object({
   agentId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   message: Type.String(),
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 0 })),
+  requireAnnounce: Type.Optional(Type.Boolean()),
 });
 
 async function startAgentRun(params: {
@@ -220,6 +225,10 @@ export function createSessionsSendTool(opts?: {
           : 30;
       const timeoutMs = timeoutSeconds * 1000;
       const announceTimeoutMs = timeoutSeconds === 0 ? 30_000 : timeoutMs;
+      const requireAnnounce =
+        typeof params.requireAnnounce === "boolean"
+          ? params.requireAnnounce
+          : resolveRequireAnnounce(cfg);
       const idempotencyKey = crypto.randomUUID();
       let runId: string = idempotencyKey;
       const visibilityGuard = await createSessionVisibilityGuard({
@@ -261,9 +270,9 @@ export function createSessionsSendTool(opts?: {
       const requesterSessionKey = opts?.agentSessionKey;
       const requesterChannel = opts?.agentChannel;
       const maxPingPongTurns = resolvePingPongTurns(cfg);
-      const delivery = { status: "pending", mode: "announce" as const };
+      const delivery = { status: "pending", mode: "announce" as const, required: requireAnnounce };
       const startA2AFlow = (roundOneReply?: string, waitRunId?: string) => {
-        void runSessionsSendA2AFlow({
+        return runSessionsSendA2AFlow({
           targetSessionKey: resolvedKey,
           displayKey,
           message,
@@ -273,6 +282,7 @@ export function createSessionsSendTool(opts?: {
           requesterChannel,
           roundOneReply,
           waitRunId,
+          requireAnnounce,
         });
       };
 
@@ -286,7 +296,7 @@ export function createSessionsSendTool(opts?: {
           return start.result;
         }
         runId = start.runId;
-        startA2AFlow(undefined, runId);
+        void startA2AFlow(undefined, runId);
         return jsonResult({
           runId,
           status: "accepted",
@@ -353,14 +363,14 @@ export function createSessionsSendTool(opts?: {
       const filtered = stripToolMessages(Array.isArray(history?.messages) ? history.messages : []);
       const last = filtered.length > 0 ? filtered[filtered.length - 1] : undefined;
       const reply = last ? extractAssistantText(last) : undefined;
-      startA2AFlow(reply ?? undefined);
+      const announceResult = await startA2AFlow(reply ?? undefined);
 
       return jsonResult({
         runId,
         status: "ok",
         reply,
         sessionKey: displayKey,
-        delivery,
+        delivery: announceResult ?? delivery,
       });
     },
   };

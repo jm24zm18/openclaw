@@ -17,6 +17,7 @@ export {
 } from "./pw-session.js";
 
 export {
+  applyManagedIdentityViaPlaywright,
   armDialogViaPlaywright,
   armFileUploadViaPlaywright,
   batchViaPlaywright,
@@ -53,6 +54,7 @@ export {
   snapshotAiViaPlaywright,
   snapshotAriaViaPlaywright,
   snapshotRoleViaPlaywright,
+  resolveManagedIdentityPolicyKey,
   screenshotWithLabelsViaPlaywright,
   storageClearViaPlaywright,
   storageGetViaPlaywright,

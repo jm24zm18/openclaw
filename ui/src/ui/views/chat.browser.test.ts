@@ -75,9 +75,8 @@ describe("chat context notice", () => {
       return;
     }
 
-    const iconStyle = getComputedStyle(icon);
-    expect(iconStyle.width).toBe("16px");
-    expect(iconStyle.height).toBe("16px");
-    expect(icon.getBoundingClientRect().width).toBeLessThan(24);
+    expect(icon.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(icon.getAttribute("stroke-width")).toBe("2");
+    expect(icon.classList.contains("context-notice__icon")).toBe(true);
   });
 });

@@ -129,6 +129,7 @@ export function buildAgentToAgentAnnounceContext(params: {
   originalMessage: string;
   roundOneReply?: string;
   latestReply?: string;
+  requireAnnounce?: boolean;
 }) {
   const lines = [
     "Agent-to-agent announce step:",
@@ -138,7 +139,12 @@ export function buildAgentToAgentAnnounceContext(params: {
       ? `Round 1 reply: ${params.roundOneReply}`
       : "Round 1 reply: (not available).",
     params.latestReply ? `Latest reply: ${params.latestReply}` : "Latest reply: (not available).",
-    `If you want to remain silent, reply exactly "${ANNOUNCE_SKIP_TOKEN}".`,
+    params.requireAnnounce
+      ? "A visible acknowledgement or handoff message is required for this exchange."
+      : `If you want to remain silent, reply exactly "${ANNOUNCE_SKIP_TOKEN}".`,
+    params.requireAnnounce
+      ? `Do not reply with "${ANNOUNCE_SKIP_TOKEN}" or "${SILENT_REPLY_TOKEN}".`
+      : undefined,
     "Any other reply will be posted to the target channel.",
     "After this reply, the agent-to-agent conversation is over.",
   ].filter(Boolean);
@@ -163,4 +169,8 @@ export function resolvePingPongTurns(cfg?: OpenClawConfig) {
   }
   const rounded = Math.floor(raw);
   return Math.max(0, Math.min(MAX_PING_PONG_TURNS, rounded));
+}
+
+export function resolveRequireAnnounce(cfg?: OpenClawConfig): boolean {
+  return cfg?.session?.agentToAgent?.requireAnnounce === true;
 }

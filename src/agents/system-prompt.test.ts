@@ -228,6 +228,28 @@ describe("buildAgentSystemPrompt", () => {
     );
   });
 
+  it("defaults to continue-until-blocked execution guidance", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+    });
+
+    expect(prompt).toContain("Default autonomy: continue until blocked.");
+    expect(prompt).toContain("Avoid permission-seeking filler like 'If you want, I'll continue'");
+    expect(prompt).toContain(
+      "For browser tasks, prefer a serial loop: keep one active page, navigate in place, extract, commit the result, then continue to the next item.",
+    );
+  });
+
+  it("supports explicit autonomy mode overrides", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      autonomyMode: "phase-checkpoints",
+    });
+
+    expect(prompt).toContain("Default autonomy: use phase checkpoints.");
+    expect(prompt).not.toContain("Default autonomy: continue until blocked.");
+  });
+
   it("lists available tools when provided", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",

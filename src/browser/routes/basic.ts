@@ -1,5 +1,6 @@
 import { getChromeMcpPid } from "../chrome-mcp.js";
 import { resolveBrowserExecutableForPlatform } from "../chrome.executables.js";
+import { getIdentityRelevantExtraArgs } from "../chrome.js";
 import { toBrowserErrorResponse } from "../errors.js";
 import { getBrowserProfileCapabilities } from "../profile-capabilities.js";
 import { createBrowserProfilesService } from "../profiles-service.js";
@@ -81,6 +82,17 @@ export function registerBrowserBasicRoutes(app: BrowserRouteRegistrar, ctx: Brow
 
       const profileState = current.profiles.get(profileCtx.profile.name);
       const capabilities = getBrowserProfileCapabilities(profileCtx.profile);
+      const activeManagedTargetId = profileState?.lastTargetId ?? null;
+      const activeManagedTab =
+        (activeManagedTargetId
+          ? profileState?.managedTabs.get(activeManagedTargetId)
+          : undefined) ??
+        (activeManagedTargetId
+          ? [...(profileState?.managedTabs.values() ?? [])].find((tab) =>
+              tab.previousTargetIds.includes(activeManagedTargetId),
+            )
+          : undefined) ??
+        null;
       let detectedBrowser: string | null = null;
       let detectedExecutablePath: string | null = null;
       let detectError: string | null = null;
@@ -99,6 +111,7 @@ export function registerBrowserBasicRoutes(app: BrowserRouteRegistrar, ctx: Brow
         enabled: current.resolved.enabled,
         profile: profileCtx.profile.name,
         driver: profileCtx.profile.driver,
+        profileMode: capabilities.mode,
         transport: capabilities.usesChromeMcp ? "chrome-mcp" : "cdp",
         running: cdpReady,
         cdpReady,
@@ -118,6 +131,24 @@ export function registerBrowserBasicRoutes(app: BrowserRouteRegistrar, ctx: Brow
         noSandbox: current.resolved.noSandbox,
         executablePath: current.resolved.executablePath ?? null,
         attachOnly: profileCtx.profile.attachOnly,
+        identity: current.resolved.identity ?? { mode: "default" },
+        identityRelevantExtraArgs: getIdentityRelevantExtraArgs(current.resolved.extraArgs ?? []),
+        diagnostics: {
+          activePageTargetId: activeManagedTargetId,
+          requestedUrl: activeManagedTab?.requestedUrl ?? null,
+          actualUrl: activeManagedTab?.currentUrl ?? null,
+          lifecycleState: activeManagedTab?.lifecycleState ?? null,
+          failureClass: activeManagedTab?.failureClass ?? null,
+          autonomyMode: null,
+        },
+        managedProfileType:
+          capabilities.mode === "local-managed"
+            ? "openclaw-managed"
+            : profileCtx.profile.userDataDir
+              ? "existing-session-explicit-user-data-dir"
+              : capabilities.mode === "local-existing-session"
+                ? "existing-session-default-browser"
+                : "remote-cdp",
       });
     } catch (err) {
       const mapped = toBrowserErrorResponse(err);

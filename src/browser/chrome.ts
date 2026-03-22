@@ -81,6 +81,12 @@ export function resolveOpenClawUserDataDir(profileName = DEFAULT_OPENCLAW_BROWSE
   return path.join(CONFIG_DIR, "browser", profileName, "user-data");
 }
 
+export function getIdentityRelevantExtraArgs(extraArgs: string[]): string[] {
+  return extraArgs.filter((arg) =>
+    /^(--user-agent=|--lang=|--window-size=|--accept-lang=|--blink-settings=)/i.test(arg),
+  );
+}
+
 function cdpUrlForPort(cdpPort: number) {
   return `http://127.0.0.1:${cdpPort}`;
 }
@@ -293,6 +299,14 @@ export async function launchOpenClawChrome(
       "--hide-crash-restore-bubble",
       "--password-store=basic",
     ];
+    const identity = resolved.identity;
+
+    if (identity.windowSize) {
+      args.push(`--window-size=${identity.windowSize.width},${identity.windowSize.height}`);
+    }
+    if (identity.acceptLanguage) {
+      args.push(`--lang=${identity.acceptLanguage}`);
+    }
 
     if (resolved.headless) {
       // Best-effort; older Chromes may ignore.
@@ -307,7 +321,8 @@ export async function launchOpenClawChrome(
       args.push("--disable-dev-shm-usage");
     }
 
-    // Append user-configured extra arguments (e.g., stealth flags, window size)
+    // Append user-configured extra arguments after explicit identity defaults so the
+    // escape hatch can still override them deliberately.
     if (resolved.extraArgs.length > 0) {
       args.push(...resolved.extraArgs);
     }

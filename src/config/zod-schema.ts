@@ -28,6 +28,24 @@ const BrowserSnapshotDefaultsSchema = z
   .strict()
   .optional();
 
+const BrowserIdentitySchema = z
+  .object({
+    mode: z.union([z.literal("default"), z.literal("custom"), z.literal("stealth")]).optional(),
+    userAgent: z.string().optional(),
+    locale: z.string().optional(),
+    timezoneId: z.string().optional(),
+    acceptLanguage: z.string().optional(),
+    windowSize: z
+      .object({
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .optional();
+
 const NodeHostSchema = z
   .object({
     browserProxy: z
@@ -366,6 +384,13 @@ export const OpenClawSchema = z
         cdpPortRangeStart: z.number().int().min(1).max(65535).optional(),
         defaultProfile: z.string().optional(),
         snapshotDefaults: BrowserSnapshotDefaultsSchema,
+        tabPolicy: z
+          .object({
+            mode: z.union([z.literal("single"), z.literal("multi")]).optional(),
+          })
+          .strict()
+          .optional(),
+        identity: BrowserIdentitySchema,
         ssrfPolicy: z
           .object({
             allowPrivateNetwork: z.boolean().optional(),

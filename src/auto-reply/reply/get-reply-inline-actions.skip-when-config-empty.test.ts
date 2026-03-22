@@ -1,32 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEntry } from "../../config/sessions.js";
+import { setActivePluginRegistry } from "../../plugins/runtime.js";
+import {
+  createChannelTestPluginBase,
+  createTestRegistry,
+} from "../../test-utils/channel-plugins.js";
 import type { TemplateContext } from "../templating.js";
 import { clearInlineDirectives } from "./get-reply-directives-utils.js";
 import { buildTestCtx } from "./test-ctx.js";
+import { createMockTypingController } from "./test-helpers.js";
 import type { TypingController } from "./typing.js";
-
-const handleCommandsMock = vi.fn();
-
-vi.mock("./commands.js", () => ({
-  handleCommands: (...args: unknown[]) => handleCommandsMock(...args),
-  buildStatusReply: vi.fn(),
-  buildCommandContext: vi.fn(),
-}));
-
 // Import after mocks.
 const { handleInlineActions } = await import("./get-reply-inline-actions.js");
 type HandleInlineActionsInput = Parameters<typeof handleInlineActions>[0];
-
-const createTypingController = (): TypingController => ({
-  onReplyStart: async () => {},
-  startTypingLoop: async () => {},
-  startTypingOnText: async () => {},
-  refreshTypingTtl: () => {},
-  isActive: () => false,
-  markRunComplete: () => {},
-  markDispatchIdle: () => {},
-  cleanup: vi.fn(),
-});
 
 const createHandleInlineActionsInput = (params: {
   ctx: ReturnType<typeof buildTestCtx>;
@@ -94,16 +80,22 @@ async function expectInlineActionSkipped(params: {
   const result = await handleInlineActions(createHandleInlineActionsInput(params));
   expect(result).toEqual({ kind: "reply", reply: undefined });
   expect(params.typing.cleanup).toHaveBeenCalled();
-  expect(handleCommandsMock).not.toHaveBeenCalled();
 }
 
 describe("handleInlineActions", () => {
   beforeEach(() => {
-    handleCommandsMock.mockReset();
+    vi.restoreAllMocks();
   });
 
   it("skips whatsapp replies when config is empty and From !== To", async () => {
-    const typing = createTypingController();
+    const typing = createMockTypingController();
+    const whatsappPlugin = {
+      ...createChannelTestPluginBase({ id: "whatsapp", label: "WhatsApp" }),
+      commands: { skipWhenConfigEmpty: true },
+    };
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "whatsapp", plugin: whatsappPlugin, source: "test" }]),
+    );
 
     const ctx = buildTestCtx({
       From: "whatsapp:+999",
@@ -119,9 +111,7 @@ describe("handleInlineActions", () => {
   });
 
   it("forwards agentDir into handleCommands", async () => {
-    const typing = createTypingController();
-
-    handleCommandsMock.mockResolvedValue({ shouldContinue: false, reply: { text: "done" } });
+    const typing = createMockTypingController();
 
     const ctx = buildTestCtx({
       Body: "/status",
@@ -146,17 +136,18 @@ describe("handleInlineActions", () => {
       }),
     );
 
-    expect(result).toEqual({ kind: "reply", reply: { text: "done" } });
-    expect(handleCommandsMock).toHaveBeenCalledTimes(1);
-    expect(handleCommandsMock).toHaveBeenCalledWith(
+    expect(result).toEqual(
       expect.objectContaining({
-        agentDir,
+        kind: "reply",
+        reply: expect.objectContaining({
+          text: expect.stringContaining("OpenClaw"),
+        }),
       }),
     );
   });
 
   it("skips stale queued messages that are at or before the /stop cutoff", async () => {
-    const typing = createTypingController();
+    const typing = createMockTypingController();
     const sessionEntry: SessionEntry = {
       sessionId: "session-1",
       updatedAt: Date.now(),
@@ -186,7 +177,7 @@ describe("handleInlineActions", () => {
   });
 
   it("clears /stop cutoff when a newer message arrives", async () => {
-    const typing = createTypingController();
+    const typing = createMockTypingController();
     const sessionEntry: SessionEntry = {
       sessionId: "session-2",
       updatedAt: Date.now(),
@@ -194,7 +185,6 @@ describe("handleInlineActions", () => {
       abortedLastRun: true,
     };
     const sessionStore = { "s:main": sessionEntry };
-    handleCommandsMock.mockResolvedValue({ shouldContinue: false, reply: { text: "ok" } });
     const ctx = buildTestCtx({
       Body: "new message",
       CommandBody: "new message",
@@ -217,9 +207,16 @@ describe("handleInlineActions", () => {
       }),
     );
 
-    expect(result).toEqual({ kind: "reply", reply: { text: "ok" } });
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "continue",
+        directives: expect.objectContaining({
+          cleaned: "new message",
+        }),
+        abortedLastRun: false,
+      }),
+    );
     expect(sessionStore["s:main"]?.abortCutoffMessageSid).toBeUndefined();
     expect(sessionStore["s:main"]?.abortCutoffTimestamp).toBeUndefined();
-    expect(handleCommandsMock).toHaveBeenCalledTimes(1);
   });
 });

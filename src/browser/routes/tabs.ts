@@ -118,8 +118,14 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
 
   app.post("/tabs/open", async (req, res) => {
     const url = toStringOrEmpty((req.body as { url?: unknown })?.url);
+    const openDisposition = toStringOrEmpty(
+      (req.body as { openDisposition?: unknown })?.openDisposition,
+    );
     if (!url) {
       return jsonError(res, 400, "url is required");
+    }
+    if (openDisposition && openDisposition !== "current" && openDisposition !== "new") {
+      return jsonError(res, 400, 'openDisposition must be "current" or "new"');
     }
 
     await withTabsProfileRoute({
@@ -129,7 +135,9 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
       mapTabError: true,
       run: async (profileCtx) => {
         await profileCtx.ensureBrowserAvailable();
-        const tab = await profileCtx.openTab(url);
+        const tab = await profileCtx.openTab(url, {
+          openDisposition: (openDisposition as "current" | "new" | "") || undefined,
+        });
         res.json(tab);
       },
     });

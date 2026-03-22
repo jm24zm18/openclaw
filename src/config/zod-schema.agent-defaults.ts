@@ -149,6 +149,18 @@ export const AgentDefaultsSchema = z
       ])
       .optional(),
     verboseDefault: z.union([z.literal("off"), z.literal("on"), z.literal("full")]).optional(),
+    autonomy: z
+      .object({
+        mode: z
+          .union([
+            z.literal("continue-until-blocked"),
+            z.literal("phase-checkpoints"),
+            z.literal("ask-often"),
+          ])
+          .optional(),
+      })
+      .strict()
+      .optional(),
     elevatedDefault: z
       .union([z.literal("off"), z.literal("on"), z.literal("ask"), z.literal("full")])
       .optional(),

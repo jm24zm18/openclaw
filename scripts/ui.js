@@ -134,8 +134,6 @@ function depsInstalled(kind) {
     require.resolve("dompurify");
     if (kind === "test") {
       require.resolve("vitest");
-      require.resolve("@vitest/browser-playwright");
-      require.resolve("playwright");
     }
     return true;
   } catch {

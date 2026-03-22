@@ -1366,11 +1366,22 @@ export abstract class MemoryManagerSyncOps {
   }
 
   private resolveConfiguredScopeHash(): string {
+    let workspaceScope = this.workspaceDir.replace(/\\/g, "/");
+    try {
+      workspaceScope = fsSync.realpathSync.native(this.workspaceDir).replace(/\\/g, "/");
+    } catch {}
+    let storeScope = resolveUserPath(this.settings.store.path).replace(/\\/g, "/");
+    try {
+      storeScope = fsSync.realpathSync.native(storeScope).replace(/\\/g, "/");
+    } catch {}
     const extraPaths = normalizeExtraMemoryPaths(this.workspaceDir, this.settings.extraPaths)
       .map((value) => value.replace(/\\/g, "/"))
       .toSorted();
     return hashText(
       JSON.stringify({
+        agentId: this.agentId,
+        workspaceDir: workspaceScope,
+        storePath: storeScope,
         extraPaths,
         multimodal: {
           enabled: this.settings.multimodal.enabled,

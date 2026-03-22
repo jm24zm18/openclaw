@@ -25,13 +25,15 @@ function buildResolvedConfig(): ResolvedBrowserConfig {
     noSandbox: false,
     attachOnly: true,
     defaultProfile: DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME,
+    identity: { mode: "default" },
+    tabPolicy: { mode: "single" },
     profiles: {
       [DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME]: {
         cdpPort: 1,
         color: DEFAULT_OPENCLAW_BROWSER_COLOR,
       },
     },
-  } as unknown as ResolvedBrowserConfig;
+  };
 }
 
 describe("startBrowserBridgeServer auth", () => {

@@ -1,3 +1,5 @@
+import { formatErrorMessage } from "../infra/errors.js";
+import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import type {
   Browser,
   BrowserContext,
@@ -5,10 +7,8 @@ import type {
   Page,
   Request,
   Response,
-} from "playwright-core";
-import { chromium } from "playwright-core";
-import { formatErrorMessage } from "../infra/errors.js";
-import type { SsrFPolicy } from "../infra/net/ssrf.js";
+} from "./automation.js";
+import { chromium } from "./automation.js";
 import { withNoProxyForCdpUrl } from "./cdp-proxy-bypass.js";
 import {
   appendCdpPath,

@@ -115,6 +115,7 @@ export function createProfileAvailability({
     }
     profileState.reconcile = null;
     profileState.lastTargetId = null;
+    profileState.identityApplied?.clear();
 
     const previousProfile = reconcile.previousProfile;
     if (profileState.running) {

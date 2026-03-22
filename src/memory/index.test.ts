@@ -1002,6 +1002,61 @@ describe("memory index", () => {
     await secondManager.close?.();
   });
 
+  it("reindexes when the workspace scope changes for the same store path", async () => {
+    const storePath = path.join(fixtureRoot, `index-scope-${randomUUID()}.sqlite`);
+    const altWorkspaceDir = path.join(fixtureRoot, `workspace-scope-${randomUUID()}`);
+    await fs.mkdir(altWorkspaceDir, { recursive: true });
+    await fs.writeFile(path.join(altWorkspaceDir, "MEMORY.md"), "# MEMORY.md - Forge\nForge only");
+
+    const makeCfg = (workspace: string) =>
+      ({
+        agents: {
+          defaults: {
+            workspace,
+            memorySearch: {
+              provider: "openai",
+              model: "mock-embed",
+              store: { path: storePath, vector: { enabled: false } },
+              chunking: { tokens: 4000, overlap: 0 },
+              sync: { watch: false, onSessionStart: false, onSearch: true },
+              query: { minScore: 0, hybrid: { enabled: false } },
+            },
+          },
+          list: [{ id: "main", default: true, workspace }],
+        },
+      }) as TestCfg;
+
+    const first = requireManager(
+      await getMemorySearchManager({ cfg: makeCfg(workspaceDir), agentId: "main" }),
+    );
+    await first.sync({ reason: "test", force: true });
+    await first.close?.();
+
+    const second = requireManager(
+      await getMemorySearchManager({ cfg: makeCfg(altWorkspaceDir), agentId: "main" }),
+    );
+    await second.sync({ reason: "test", force: true });
+
+    const db = (
+      second as unknown as {
+        db: {
+          prepare: (sql: string) => {
+            all: (...params: unknown[]) => Array<{ path: string }>;
+          };
+        };
+      }
+    ).db;
+    const rows = db
+      .prepare(`SELECT path FROM files WHERE source = ? ORDER BY path`)
+      .all("memory")
+      .map((row) => row.path);
+
+    expect(rows).toEqual(["MEMORY.md"]);
+    await second.close?.();
+    await fs.rm(storePath, { force: true });
+    await fs.rm(altWorkspaceDir, { recursive: true, force: true });
+  });
+
   it("reindexes when multimodal settings change", async () => {
     const storePath = path.join(workspaceDir, `index-scope-multimodal-${randomUUID()}.sqlite`);
     const mediaDir = path.join(workspaceDir, "scope-media");
