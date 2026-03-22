@@ -1,6 +1,6 @@
-import { chromium } from "playwright-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SsrFBlockedError } from "../infra/net/ssrf.js";
+import { chromium } from "./automation.js";
 import * as chromeModule from "./chrome.js";
 import { InvalidBrowserNavigationUrlError } from "./navigation-guard.js";
 import { closePlaywrightBrowserConnection, createPageViaPlaywright } from "./pw-session.js";
@@ -34,7 +34,7 @@ function installBrowserMocks() {
       send: sessionSend,
       detach: sessionDetach,
     })),
-  } as unknown as import("playwright-core").BrowserContext;
+  } as unknown as import("./automation.js").BrowserContext;
 
   const page = {
     on: pageOn,
@@ -42,13 +42,13 @@ function installBrowserMocks() {
     goto: pageGoto,
     title: pageTitle,
     url: pageUrl,
-  } as unknown as import("playwright-core").Page;
+  } as unknown as import("./automation.js").Page;
 
   const browser = {
     contexts: () => [context],
     on: browserOn,
     close: browserClose,
-  } as unknown as import("playwright-core").Browser;
+  } as unknown as import("./automation.js").Browser;
 
   connectOverCdpSpy.mockResolvedValue(browser);
   getChromeWebSocketUrlSpy.mockResolvedValue(null);

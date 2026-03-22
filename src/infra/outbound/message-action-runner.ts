@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import {
@@ -14,7 +16,13 @@ import type {
   ChannelThreadingToolContext,
 } from "../../channels/plugins/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import {
+  loadSessionStore,
+  resolveDefaultSessionStorePath,
+  resolveSessionStoreEntry,
+} from "../../config/sessions.js";
 import { hasInteractiveReplyBlocks, hasReplyPayloadContent } from "../../interactive/payload.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { getAgentScopedMediaLocalRoots } from "../../media/local-roots.js";
 import { hasPollCreationParams } from "../../poll-params.js";
 import { resolvePollMaxSelections } from "../../polls.js";
@@ -56,6 +64,242 @@ import { executePollAction, executeSendAction } from "./outbound-send-service.js
 import { ensureOutboundSessionEntry, resolveOutboundSessionRoute } from "./outbound-session.js";
 import { resolveChannelTarget, type ResolvedMessagingTarget } from "./target-resolver.js";
 import { extractToolPayload } from "./tool-payload.js";
+
+const log = createSubsystemLogger("outbound/message");
+const QUARTERMASTER_AGENT_ID = "quartermaster";
+const SCREENSHOT_MEDIA_SEGMENT = `${path.sep}media${path.sep}browser${path.sep}`;
+const SCREENSHOT_REQUEST_RE =
+  /\b(screenshot|screen ?shot|screen ?grab|page capture|page shot|capture the page|context image)\b/i;
+const IMAGE_REQUEST_RE = /\b(pic|pics|picture|pictures|photo|photos|image|images)\b/i;
+const SHOPPING_REQUEST_RE =
+  /\b(find|need|looking for|buy|source|shop|shopping|lookup|look up|options|price|prices|link|links|product|products|part|parts|model|match|compatible)\b/i;
+const DIRECT_URL_RE = /https?:\/\/\S+/i;
+const PRICE_RE = /(?:\$|usd\s*)\d[\d,]*(?:\.\d{2})?/i;
+const TITLE_RE = /[a-z0-9][a-z0-9 ."'()/#:+-]{8,}/i;
+const BLOCKED_SHOPPING_REPLY =
+  "I couldn't verify a shopping option with a clean product image, price, and direct link yet. Need review.";
+
+type QuartermasterShoppingContext = {
+  isShoppingRequest: boolean;
+  explicitScreenshotRequest: boolean;
+  explicitImageRequest: boolean;
+};
+
+function extractTextBlocks(content: unknown): string[] {
+  if (!Array.isArray(content)) {
+    return [];
+  }
+  const texts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") {
+      continue;
+    }
+    const type = (block as { type?: unknown }).type;
+    const text = (block as { text?: unknown }).text;
+    if (type === "text" && typeof text === "string" && text.trim()) {
+      texts.push(text);
+    }
+  }
+  return texts;
+}
+
+function buildQuartermasterPromptContext(userTexts: string[]): QuartermasterShoppingContext {
+  const combined = userTexts
+    .filter((text) => !/A new session was started via \/new or \/reset/i.test(text))
+    .join("\n");
+  return {
+    isShoppingRequest: SHOPPING_REQUEST_RE.test(combined),
+    explicitScreenshotRequest: SCREENSHOT_REQUEST_RE.test(combined),
+    explicitImageRequest: IMAGE_REQUEST_RE.test(combined),
+  };
+}
+
+async function resolveQuartermasterShoppingContext(params: {
+  agentId?: string;
+  sessionKey?: string;
+}): Promise<QuartermasterShoppingContext> {
+  if (!params.sessionKey || normalizeAgentId(params.agentId) !== QUARTERMASTER_AGENT_ID) {
+    return {
+      isShoppingRequest: false,
+      explicitScreenshotRequest: false,
+      explicitImageRequest: false,
+    };
+  }
+
+  try {
+    const storePath = resolveDefaultSessionStorePath(params.agentId);
+    const store = loadSessionStore(storePath, { skipCache: true });
+    const { existing } = resolveSessionStoreEntry({
+      store,
+      sessionKey: params.sessionKey,
+    });
+    if (!existing?.sessionId) {
+      return {
+        isShoppingRequest: false,
+        explicitScreenshotRequest: false,
+        explicitImageRequest: false,
+      };
+    }
+
+    const sessionFile =
+      existing.sessionFile || path.join(path.dirname(storePath), `${existing.sessionId}.jsonl`);
+    const raw = await fs.promises.readFile(sessionFile, "utf-8");
+    const userTexts: string[] = [];
+    for (const line of raw.split(/\r?\n/).toReversed()) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(line) as {
+          type?: string;
+          message?: { role?: string; content?: unknown };
+        };
+        if (parsed.type !== "message" || parsed.message?.role !== "user") {
+          continue;
+        }
+        const text = extractTextBlocks(parsed.message.content).join("\n").trim();
+        if (!text) {
+          continue;
+        }
+        userTexts.push(text);
+        if (userTexts.length >= 3) {
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return buildQuartermasterPromptContext(userTexts.toReversed());
+  } catch (err) {
+    log.warn(`quartermaster shopping context resolution failed: ${String(err)}`);
+    return {
+      isShoppingRequest: false,
+      explicitScreenshotRequest: false,
+      explicitImageRequest: false,
+    };
+  }
+}
+
+function looksLikeScreenshotMedia(value?: string): boolean {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return false;
+  }
+  return trimmed.includes(SCREENSHOT_MEDIA_SEGMENT) || /\/media\/browser\//i.test(trimmed);
+}
+
+function looksLikeShoppingResult(params: {
+  message: string;
+  caption: string;
+  mediaUrls: string[];
+}): boolean {
+  const combined = [params.message, params.caption].filter(Boolean).join("\n");
+  return Boolean(
+    params.mediaUrls.length > 0 ||
+    DIRECT_URL_RE.test(combined) ||
+    PRICE_RE.test(combined) ||
+    /\b(product image|price|option|match|vendor)\b/i.test(combined),
+  );
+}
+
+function hasShoppingContract(text: string, mediaUrls: string[]): boolean {
+  return (
+    mediaUrls.length > 0 && DIRECT_URL_RE.test(text) && PRICE_RE.test(text) && TITLE_RE.test(text)
+  );
+}
+
+async function applyQuartermasterShoppingPolicy(params: {
+  agentId?: string;
+  channel: ChannelId;
+  sessionKey?: string;
+  message: string;
+  caption: string;
+  mergedMediaUrls: string[];
+  rawParams: Record<string, unknown>;
+}): Promise<{
+  message: string;
+  mergedMediaUrls: string[];
+}> {
+  if (
+    normalizeAgentId(params.agentId) !== QUARTERMASTER_AGENT_ID ||
+    params.channel !== "telegram"
+  ) {
+    return {
+      message: params.message,
+      mergedMediaUrls: params.mergedMediaUrls,
+    };
+  }
+
+  const promptContext = await resolveQuartermasterShoppingContext({
+    agentId: params.agentId,
+    sessionKey: params.sessionKey,
+  });
+  if (!promptContext.isShoppingRequest) {
+    return {
+      message: params.message,
+      mergedMediaUrls: params.mergedMediaUrls,
+    };
+  }
+
+  const hasScreenshotMedia = params.mergedMediaUrls.some((url) => looksLikeScreenshotMedia(url));
+  let message = params.message;
+  const combinedText = [params.message, params.caption].filter(Boolean).join("\n").trim();
+
+  if (hasScreenshotMedia) {
+    if (!promptContext.explicitScreenshotRequest) {
+      log.warn(
+        "blocked quartermaster screenshot shopping reply without explicit screenshot request",
+      );
+      delete params.rawParams.media;
+      delete params.rawParams.path;
+      delete params.rawParams.filePath;
+      delete params.rawParams.caption;
+      return {
+        message: BLOCKED_SHOPPING_REPLY,
+        mergedMediaUrls: [],
+      };
+    }
+    if (!/\bscreenshot\b/i.test(combinedText)) {
+      message = combinedText
+        ? `Screenshot — ${combinedText}`
+        : "Screenshot — requested page capture.";
+    }
+    return {
+      message,
+      mergedMediaUrls: params.mergedMediaUrls,
+    };
+  }
+
+  if (
+    !looksLikeShoppingResult({
+      message: params.message,
+      caption: params.caption,
+      mediaUrls: params.mergedMediaUrls,
+    })
+  ) {
+    return {
+      message: params.message,
+      mergedMediaUrls: params.mergedMediaUrls,
+    };
+  }
+
+  if (!hasShoppingContract(combinedText, params.mergedMediaUrls)) {
+    log.warn("blocked quartermaster incomplete shopping reply missing image/price/link contract");
+    delete params.rawParams.media;
+    delete params.rawParams.path;
+    delete params.rawParams.filePath;
+    delete params.rawParams.caption;
+    return {
+      message: BLOCKED_SHOPPING_REPLY,
+      mergedMediaUrls: [],
+    };
+  }
+
+  return {
+    message: params.message,
+    mergedMediaUrls: params.mergedMediaUrls,
+  };
+}
 
 export type MessageActionRunnerGateway = {
   url?: string;
@@ -442,6 +686,19 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
     params.media = mergedMediaUrls[0] || undefined;
   }
 
+  const quartermasterPolicy = await applyQuartermasterShoppingPolicy({
+    agentId,
+    channel,
+    sessionKey: input.sessionKey,
+    message: parsed.text,
+    caption,
+    mergedMediaUrls,
+    rawParams: params,
+  });
+  message = quartermasterPolicy.message;
+  mergedMediaUrls.length = 0;
+  mergedMediaUrls.push(...quartermasterPolicy.mergedMediaUrls);
+  params.media = mergedMediaUrls[0] || undefined;
   message = await maybeApplyCrossContextMarker({
     cfg,
     channel,

@@ -5,9 +5,16 @@ import { createBrowserRouteContext } from "./server-context.js";
 
 export const originalFetch = globalThis.fetch;
 
-export function makeState(
-  profile: "remote" | "openclaw",
-): BrowserServerState & { profiles: Map<string, { lastTargetId?: string | null }> } {
+export function makeState(profile: "remote" | "openclaw"): BrowserServerState & {
+  profiles: Map<
+    string,
+    {
+      lastTargetId?: string | null;
+      managedTabs?: Map<string, unknown>;
+      pendingOpens?: Map<string, unknown>;
+    }
+  >;
+} {
   return {
     // oxlint-disable-next-line typescript/no-explicit-any
     server: null as any,
@@ -30,6 +37,8 @@ export function makeState(
       attachOnly: false,
       ssrfPolicy: { allowPrivateNetwork: true },
       defaultProfile: profile,
+      identity: { mode: "default" },
+      tabPolicy: { mode: "single" },
       profiles: {
         remote: {
           cdpUrl: "https://browserless.example/chrome?token=abc",

@@ -1,16 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveBrowserConfig } from "./config.js";
-import { createBrowserProfilesService } from "./profiles-service.js";
-import type { BrowserRouteContext, BrowserServerState } from "./server-context.js";
+
+const configIOMocks = vi.hoisted(() => ({
+  loadConfig: vi.fn(),
+  writeConfigFile: vi.fn(async () => {}),
+}));
 
 vi.mock("../config/config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../config/config.js")>();
   return {
     ...actual,
-    loadConfig: vi.fn(),
-    writeConfigFile: vi.fn(async () => {}),
+    createConfigIO: vi.fn(() => configIOMocks),
+    getRuntimeConfigSnapshot: vi.fn(() => null),
+    loadConfig: configIOMocks.loadConfig,
+    writeConfigFile: configIOMocks.writeConfigFile,
   };
 });
 
@@ -22,9 +26,14 @@ vi.mock("./chrome.js", () => ({
   resolveOpenClawUserDataDir: vi.fn(() => "/tmp/openclaw-test/openclaw/user-data"),
 }));
 
-import { loadConfig, writeConfigFile } from "../config/config.js";
-import { resolveOpenClawUserDataDir } from "./chrome.js";
-import { movePathToTrash } from "./trash.js";
+import type { BrowserRouteContext, BrowserServerState } from "./server-context.js";
+
+let resolveBrowserConfig: typeof import("./config.js").resolveBrowserConfig;
+let createBrowserProfilesService: typeof import("./profiles-service.js").createBrowserProfilesService;
+let loadConfig: typeof import("../config/config.js").loadConfig;
+let writeConfigFile: typeof import("../config/config.js").writeConfigFile;
+let resolveOpenClawUserDataDir: typeof import("./chrome.js").resolveOpenClawUserDataDir;
+let movePathToTrash: typeof import("./trash.js").movePathToTrash;
 
 function createCtx(resolved: BrowserServerState["resolved"]) {
   const state: BrowserServerState = {
@@ -57,8 +66,14 @@ async function createWorkProfileWithConfig(params: {
 }
 
 describe("BrowserProfilesService", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
     vi.clearAllMocks();
+    ({ resolveBrowserConfig } = await import("./config.js"));
+    ({ createBrowserProfilesService } = await import("./profiles-service.js"));
+    ({ loadConfig, writeConfigFile } = await import("../config/config.js"));
+    ({ resolveOpenClawUserDataDir } = await import("./chrome.js"));
+    ({ movePathToTrash } = await import("./trash.js"));
   });
 
   it("allocates next local port for new profiles", async () => {

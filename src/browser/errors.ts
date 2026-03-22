@@ -35,6 +35,12 @@ export class BrowserTabNotFoundError extends BrowserError {
   }
 }
 
+export class BrowserOpenUnconfirmedError extends BrowserError {
+  constructor(message = "tab open was not confirmed", options?: ErrorOptions) {
+    super(message, 409, options);
+  }
+}
+
 export class BrowserProfileNotFoundError extends BrowserError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, 404, options);

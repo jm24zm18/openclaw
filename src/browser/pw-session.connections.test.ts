@@ -1,5 +1,5 @@
-import { chromium } from "playwright-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { chromium } from "./automation.js";
 import * as chromeModule from "./chrome.js";
 import { closePlaywrightBrowserConnection, listPagesViaPlaywright } from "./pw-session.js";
 
@@ -7,19 +7,19 @@ const connectOverCdpSpy = vi.spyOn(chromium, "connectOverCDP");
 const getChromeWebSocketUrlSpy = vi.spyOn(chromeModule, "getChromeWebSocketUrl");
 
 type BrowserMockBundle = {
-  browser: import("playwright-core").Browser;
+  browser: import("./automation.js").Browser;
   browserClose: ReturnType<typeof vi.fn>;
 };
 
 function makeBrowser(targetId: string, url: string): BrowserMockBundle {
-  let context: import("playwright-core").BrowserContext;
+  let context: import("./automation.js").BrowserContext;
   const browserClose = vi.fn(async () => {});
   const page = {
     on: vi.fn(),
     context: () => context,
     title: vi.fn(async () => `title:${targetId}`),
     url: vi.fn(() => url),
-  } as unknown as import("playwright-core").Page;
+  } as unknown as import("./automation.js").Page;
 
   context = {
     pages: () => [page],
@@ -30,14 +30,14 @@ function makeBrowser(targetId: string, url: string): BrowserMockBundle {
       ),
       detach: vi.fn(async () => {}),
     })),
-  } as unknown as import("playwright-core").BrowserContext;
+  } as unknown as import("./automation.js").BrowserContext;
 
   const browser = {
     contexts: () => [context],
     on: vi.fn(),
     off: vi.fn(),
     close: browserClose,
-  } as unknown as import("playwright-core").Browser;
+  } as unknown as import("./automation.js").Browser;
 
   return { browser, browserClose };
 }
@@ -52,12 +52,12 @@ describe("pw-session connection scoping", () => {
   it("does not share in-flight connectOverCDP promises across different cdpUrls", async () => {
     const browserA = makeBrowser("A", "https://a.example");
     const browserB = makeBrowser("B", "https://b.example");
-    let resolveA: ((value: import("playwright-core").Browser) => void) | undefined;
+    let resolveA: ((value: import("./automation.js").Browser) => void) | undefined;
 
     connectOverCdpSpy.mockImplementation((async (...args: unknown[]) => {
       const endpointText = String(args[0]);
       if (endpointText === "http://127.0.0.1:9222") {
-        return await new Promise<import("playwright-core").Browser>((resolve) => {
+        return await new Promise<import("./automation.js").Browser>((resolve) => {
           resolveA = resolve;
         });
       }

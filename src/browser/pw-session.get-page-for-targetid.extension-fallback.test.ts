@@ -1,5 +1,5 @@
-import { chromium } from "playwright-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { chromium } from "./automation.js";
 import * as chromeModule from "./chrome.js";
 import { closePlaywrightBrowserConnection, getPageForTargetId } from "./pw-session.js";
 
@@ -28,7 +28,7 @@ function createExtensionFallbackBrowserHarness(options?: {
     pages: () => [],
     on: contextOn,
     newCDPSession,
-  } as unknown as import("playwright-core").BrowserContext;
+  } as unknown as import("./automation.js").BrowserContext;
 
   const pages = (options?.urls ?? [undefined]).map(
     (url) =>
@@ -36,7 +36,7 @@ function createExtensionFallbackBrowserHarness(options?: {
         on: pageOn,
         context: () => context,
         ...(url ? { url: () => url } : {}),
-      }) as unknown as import("playwright-core").Page,
+      }) as unknown as import("./automation.js").Page,
   );
   (context as unknown as { pages: () => unknown[] }).pages = () => pages;
 
@@ -44,7 +44,7 @@ function createExtensionFallbackBrowserHarness(options?: {
     contexts: () => [context],
     on: browserOn,
     close: browserClose,
-  } as unknown as import("playwright-core").Browser;
+  } as unknown as import("./automation.js").Browser;
 
   connectOverCdpSpy.mockResolvedValue(browser);
   getChromeWebSocketUrlSpy.mockResolvedValue(null);

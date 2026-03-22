@@ -23,6 +23,8 @@ function seedRunningProfileState(
     profile: { name: profileName },
     running: { pid: 1234, proc: { on: vi.fn() } },
     lastTargetId: null,
+    managedTabs: new Map(),
+    pendingOpens: new Map(),
   });
 }
 
@@ -122,7 +124,81 @@ describe("browser server-context tab selection state", () => {
     });
   });
 
-  it("closes excess managed tabs after opening a new tab", async () => {
+  it("reuses the active managed page by default in single-page mode", async () => {
+    const fetchMock = vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes("/json/list")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "ACTIVE",
+              title: "Active",
+              url: "http://127.0.0.1:3001",
+              webSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/ACTIVE",
+              type: "page",
+            },
+          ],
+        } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+
+    global.fetch = withFetchPreconnect(fetchMock);
+    const state = makeState("openclaw");
+    seedRunningProfileState(state);
+    state.profiles.get("openclaw")!.lastTargetId = "ACTIVE";
+    const ctx = createBrowserRouteContext({ getState: () => state });
+    const openclaw = ctx.forProfile("openclaw");
+
+    const opened = await openclaw.openTab("http://127.0.0.1:3001/next");
+    expect(opened.targetId).toBe("ACTIVE");
+    expect(opened.url).toBe("http://127.0.0.1:3001/next");
+  });
+
+  it("ignores worker and service-worker targets when selecting the active managed page", async () => {
+    const fetchMock = vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes("/json/list")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "WORKER",
+              title: "Worker",
+              url: "https://example.test/worker.js",
+              type: "worker",
+            },
+            {
+              id: "SW",
+              title: "SW",
+              url: "https://example.test/sw.js",
+              type: "service_worker",
+            },
+            {
+              id: "ACTIVE",
+              title: "Active",
+              url: "http://127.0.0.1:3001",
+              webSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/ACTIVE",
+              type: "page",
+            },
+          ],
+        } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+
+    global.fetch = withFetchPreconnect(fetchMock);
+    const state = makeState("openclaw");
+    seedRunningProfileState(state);
+    const ctx = createBrowserRouteContext({ getState: () => state });
+    const openclaw = ctx.forProfile("openclaw");
+
+    const opened = await openclaw.openTab("http://127.0.0.1:3001/next");
+    expect(opened.targetId).toBe("ACTIVE");
+  });
+
+  it("replaces prior managed pages when CDP has to open a fresh page in single-page mode", async () => {
     vi.spyOn(cdpModule, "createTargetViaCdp").mockResolvedValue({ targetId: "NEW" });
     const existingTabs = makeManagedTabsWithNew();
     const fetchMock = createOldTabCleanupFetchMock(existingTabs);
@@ -181,6 +257,74 @@ describe("browser server-context tab selection state", () => {
 
     const opened = await openclaw.openTab("http://127.0.0.1:3009");
     expect(opened.targetId).toBe("NEW");
+  });
+
+  it("fails with an explicit open_unconfirmed error when a new tab never redisappears as actionable", async () => {
+    vi.spyOn(cdpModule, "createTargetViaCdp").mockResolvedValue({ targetId: "NEW" });
+
+    const fetchMock = vi.fn(async (url: unknown) => {
+      const value = String(url);
+      if (value.includes("/json/list")) {
+        return {
+          ok: true,
+          json: async () => [],
+        } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch: ${value}`);
+    });
+
+    global.fetch = withFetchPreconnect(fetchMock);
+    const state = makeState("openclaw");
+    seedRunningProfileState(state);
+    const ctx = createBrowserRouteContext({ getState: () => state });
+    const openclaw = ctx.forProfile("openclaw");
+
+    await expect(openclaw.openTab("http://127.0.0.1:3009")).rejects.toThrow(/not confirmed/i);
+    expect(state.profiles.get("openclaw")?.pendingOpens?.has("NEW")).toBe(true);
+  });
+
+  it("rebinds stale tab lookups to the sole remaining managed page", async () => {
+    const fetchMock = vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.includes("/json/list")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "REBOUND",
+              title: "Rebound",
+              url: "http://127.0.0.1:3010/final",
+              webSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/REBOUND",
+              type: "page",
+            },
+          ],
+        } as unknown as Response;
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+
+    global.fetch = withFetchPreconnect(fetchMock);
+    const state = makeState("openclaw");
+    seedRunningProfileState(state);
+    state.profiles.get("openclaw")!.managedTabs.set("OLD", {
+      profile: "openclaw",
+      driver: "openclaw",
+      requestedUrl: "http://127.0.0.1:3010/start",
+      currentUrl: "http://127.0.0.1:3010/start",
+      targetId: "OLD",
+      previousTargetIds: [],
+      openedAt: Date.now(),
+      lastUsedAt: Date.now(),
+      lifecycleState: "ready",
+      domain: "127.0.0.1",
+    });
+    state.profiles.get("openclaw")!.lastTargetId = "OLD";
+    const ctx = createBrowserRouteContext({ getState: () => state });
+    const openclaw = ctx.forProfile("openclaw");
+
+    const rebound = await openclaw.ensureTabAvailable("OLD");
+    expect(rebound.targetId).toBe("REBOUND");
+    expect(state.profiles.get("openclaw")!.lastTargetId).toBe("REBOUND");
   });
 
   it("does not run managed tab cleanup in attachOnly mode", async () => {

@@ -1,7 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { registerBrowserAgentActRoutes } from "./agent.act.js";
-import { registerBrowserAgentSnapshotRoutes } from "./agent.snapshot.js";
-import { createBrowserRouteApp, createBrowserRouteResponse } from "./test-helpers.js";
 import type { BrowserRequest } from "./types.js";
 
 const routeState = vi.hoisted(() => ({
@@ -96,6 +93,11 @@ vi.mock("./agent.shared.js", () => ({
   }),
 }));
 
+let registerBrowserAgentActRoutes: typeof import("./agent.act.js").registerBrowserAgentActRoutes;
+let registerBrowserAgentSnapshotRoutes: typeof import("./agent.snapshot.js").registerBrowserAgentSnapshotRoutes;
+let createBrowserRouteApp: typeof import("./test-helpers.js").createBrowserRouteApp;
+let createBrowserRouteResponse: typeof import("./test-helpers.js").createBrowserRouteResponse;
+
 function getSnapshotGetHandler() {
   const { app, getHandlers } = createBrowserRouteApp();
   registerBrowserAgentSnapshotRoutes(app, {
@@ -127,7 +129,11 @@ function getActPostHandler() {
 }
 
 describe("existing-session browser routes", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ registerBrowserAgentActRoutes } = await import("./agent.act.js"));
+    ({ registerBrowserAgentSnapshotRoutes } = await import("./agent.snapshot.js"));
+    ({ createBrowserRouteApp, createBrowserRouteResponse } = await import("./test-helpers.js"));
     routeState.profileCtx.ensureTabAvailable.mockClear();
     chromeMcpMocks.evaluateChromeMcpScript.mockReset();
     chromeMcpMocks.navigateChromeMcpPage.mockClear();

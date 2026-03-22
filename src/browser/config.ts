@@ -1,4 +1,9 @@
-import type { BrowserConfig, BrowserProfileConfig, OpenClawConfig } from "../config/config.js";
+import type {
+  BrowserConfig,
+  BrowserIdentityConfig,
+  BrowserProfileConfig,
+  OpenClawConfig,
+} from "../config/config.js";
 import { resolveGatewayPort } from "../config/paths.js";
 import {
   deriveDefaultBrowserCdpPortRange,
@@ -36,7 +41,23 @@ export type ResolvedBrowserConfig = {
   defaultProfile: string;
   profiles: Record<string, BrowserProfileConfig>;
   ssrfPolicy?: SsrFPolicy;
+  identity: ResolvedBrowserIdentity;
+  tabPolicy: {
+    mode: "single" | "multi";
+  };
   extraArgs: string[];
+};
+
+export type ResolvedBrowserIdentity = {
+  mode: "default" | "custom" | "stealth";
+  userAgent?: string;
+  locale?: string;
+  timezoneId?: string;
+  acceptLanguage?: string;
+  windowSize?: {
+    width: number;
+    height: number;
+  };
 };
 
 export type ResolvedBrowserProfile = {
@@ -97,6 +118,41 @@ function normalizeStringList(raw: string[] | undefined): string[] | undefined {
     .map((value) => value.trim())
     .filter((value): value is string => value.length > 0);
   return values.length > 0 ? values : undefined;
+}
+
+function normalizeOptionalString(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  return value ? value : undefined;
+}
+
+function resolveBrowserIdentity(
+  identity: BrowserIdentityConfig | undefined,
+): ResolvedBrowserIdentity {
+  const userAgent = normalizeOptionalString(identity?.userAgent);
+  const locale = normalizeOptionalString(identity?.locale);
+  const timezoneId = normalizeOptionalString(identity?.timezoneId);
+  const acceptLanguage = normalizeOptionalString(identity?.acceptLanguage);
+  const windowSize =
+    identity?.windowSize &&
+    Number.isFinite(identity.windowSize.width) &&
+    Number.isFinite(identity.windowSize.height) &&
+    identity.windowSize.width > 0 &&
+    identity.windowSize.height > 0
+      ? {
+          width: Math.floor(identity.windowSize.width),
+          height: Math.floor(identity.windowSize.height),
+        }
+      : undefined;
+  const hasOverrides = Boolean(userAgent || locale || timezoneId || acceptLanguage || windowSize);
+  const mode = identity?.mode ?? (hasOverrides ? "custom" : "default");
+  return {
+    mode,
+    userAgent,
+    locale,
+    timezoneId,
+    acceptLanguage,
+    windowSize,
+  };
 }
 
 function resolveBrowserSsrFPolicy(cfg: BrowserConfig | undefined): SsrFPolicy | undefined {
@@ -280,6 +336,10 @@ export function resolveBrowserConfig(
     ? cfg.extraArgs.filter((a): a is string => typeof a === "string" && a.trim().length > 0)
     : [];
   const ssrfPolicy = resolveBrowserSsrFPolicy(cfg);
+  const identity = resolveBrowserIdentity(cfg?.identity);
+  const tabPolicy = {
+    mode: cfg?.tabPolicy?.mode === "multi" ? "multi" : "single",
+  } as const;
   return {
     enabled,
     evaluateEnabled,
@@ -299,6 +359,8 @@ export function resolveBrowserConfig(
     defaultProfile,
     profiles,
     ssrfPolicy,
+    identity,
+    tabPolicy,
     extraArgs,
   };
 }

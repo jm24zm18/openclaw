@@ -53,7 +53,34 @@ export type BrowserTab = {
   url: string;
   wsUrl?: string;
   type?: string;
+  lifecycleState?:
+    | "opening"
+    | "discovering"
+    | "ready"
+    | "recovering"
+    | "challenged"
+    | "failed"
+    | "closed"
+    | "fallback-search";
+  failureClass?:
+    | "open_unconfirmed"
+    | "target_missing"
+    | "target_replaced"
+    | "navigation_churn"
+    | "challenge_detected"
+    | "retailer_soft_block"
+    | "ambiguous_rebind"
+    | "fallback_search_entered";
+  requestedUrl?: string;
+  previousTargetIds?: string[];
+  profile?: string;
+  driver?: "openclaw" | "existing-session";
+  domain?: string;
+  openedAt?: number;
+  lastUsedAt?: number;
 };
+
+export type BrowserOpenDisposition = "current" | "new";
 
 export type SnapshotAriaNode = {
   ref: string;
@@ -228,13 +255,16 @@ export async function browserTabs(
 export async function browserOpenTab(
   baseUrl: string | undefined,
   url: string,
-  opts?: { profile?: string },
+  opts?: { profile?: string; openDisposition?: BrowserOpenDisposition },
 ): Promise<BrowserTab> {
   const q = buildProfileQuery(opts?.profile);
   return await fetchBrowserJson<BrowserTab>(withBaseUrl(baseUrl, `/tabs/open${q}`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({
+      url,
+      ...(opts?.openDisposition ? { openDisposition: opts.openDisposition } : {}),
+    }),
     timeoutMs: 15000,
   });
 }

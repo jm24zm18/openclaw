@@ -450,7 +450,7 @@ describe("tts", () => {
     it("uses summaryModel override when configured", async () => {
       const cfg: OpenClawConfig = {
         agents: { defaults: { model: { primary: "anthropic/claude-opus-4-5" } } },
-        messages: { tts: { summaryModel: "openai/gpt-4.1-mini" } },
+        messages: { tts: { summaryModel: "openai-codex/gpt-5.4-mini" } },
       };
       const config = resolveTtsConfigForTest(cfg);
       await summarizeTextForTest({
@@ -462,8 +462,8 @@ describe("tts", () => {
       });
 
       expect(resolveModelAsyncForTest).toHaveBeenCalledWith(
-        "openai",
-        "gpt-4.1-mini",
+        "openai-codex",
+        "gpt-5.4-mini",
         undefined,
         cfg,
       );

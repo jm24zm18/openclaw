@@ -128,6 +128,12 @@ export type SessionConfig = {
   agentToAgent?: {
     /** Max ping-pong turns between requester/target (0–5). Default: 5. */
     maxPingPongTurns?: number;
+    /**
+     * Require a visible announce-back message for agent-to-agent sends.
+     * When enabled, silent announce replies fall back to a runtime-generated
+     * acknowledgement instead of being treated as success.
+     */
+    requireAnnounce?: boolean;
   };
   /** Shared defaults for thread-bound session routing across channels/providers. */
   threadBindings?: SessionThreadBindingsConfig;

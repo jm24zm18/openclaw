@@ -1,5 +1,5 @@
-import type { Page } from "playwright-core";
 import { describe, expect, it, vi } from "vitest";
+import type { Page } from "./automation.js";
 import {
   ensurePageState,
   refLocator,
@@ -103,13 +103,13 @@ describe("pw-session ensurePageState", () => {
       url: () => "https://example.com/api",
       resourceType: () => "xhr",
       failure: () => ({ errorText: "net::ERR_FAILED" }),
-    } as unknown as import("playwright-core").Request;
+    } as unknown as import("./automation.js").Request;
 
     const resp = {
       request: () => req,
       status: () => 500,
       ok: () => false,
-    } as unknown as import("playwright-core").Response;
+    } as unknown as import("./automation.js").Response;
 
     handlers.get("request")?.[0]?.(req);
     handlers.get("response")?.[0]?.(resp);

@@ -1,6 +1,41 @@
 import { createConfigIO, getRuntimeConfigSnapshot } from "../config/config.js";
-import { resolveBrowserConfig, resolveProfile, type ResolvedBrowserProfile } from "./config.js";
+import {
+  resolveBrowserConfig,
+  resolveProfile,
+  type ResolvedBrowserIdentity,
+  type ResolvedBrowserProfile,
+} from "./config.js";
 import type { BrowserServerState } from "./server-context.types.js";
+
+function changedBrowserIdentityFields(
+  current: ResolvedBrowserIdentity,
+  next: ResolvedBrowserIdentity,
+): string[] {
+  const changed: string[] = [];
+  if (current.mode !== next.mode) {
+    changed.push("mode");
+  }
+  if ((current.userAgent ?? "") !== (next.userAgent ?? "")) {
+    changed.push("userAgent");
+  }
+  if ((current.locale ?? "") !== (next.locale ?? "")) {
+    changed.push("locale");
+  }
+  if ((current.timezoneId ?? "") !== (next.timezoneId ?? "")) {
+    changed.push("timezoneId");
+  }
+  if ((current.acceptLanguage ?? "") !== (next.acceptLanguage ?? "")) {
+    changed.push("acceptLanguage");
+  }
+  const currentWidth = current.windowSize?.width ?? 0;
+  const nextWidth = next.windowSize?.width ?? 0;
+  const currentHeight = current.windowSize?.height ?? 0;
+  const nextHeight = next.windowSize?.height ?? 0;
+  if (currentWidth !== nextWidth || currentHeight !== nextHeight) {
+    changed.push("windowSize");
+  }
+  return changed;
+}
 
 function changedProfileInvariants(
   current: ResolvedBrowserProfile,
@@ -32,6 +67,10 @@ function applyResolvedConfig(
   current: BrowserServerState,
   freshResolved: BrowserServerState["resolved"],
 ) {
+  const changedIdentityFields = changedBrowserIdentityFields(
+    current.resolved.identity,
+    freshResolved.identity,
+  );
   current.resolved = {
     ...freshResolved,
     // Keep the runtime evaluate gate stable across request-time profile refreshes.
@@ -43,6 +82,9 @@ function applyResolvedConfig(
     const nextProfile = resolveProfile(freshResolved, name);
     if (nextProfile) {
       const changed = changedProfileInvariants(runtime.profile, nextProfile);
+      if (runtime.profile.driver === "openclaw" && changedIdentityFields.length > 0) {
+        changed.push(`identity:${changedIdentityFields.join(",")}`);
+      }
       if (changed.length > 0) {
         runtime.reconcile = {
           previousProfile: runtime.profile,
@@ -73,10 +115,10 @@ export function refreshResolvedBrowserConfigFromDisk(params: {
     return;
   }
 
-  // Route-level browser config hot reload should observe on-disk changes immediately.
-  // The shared loadConfig() helper may return a cached snapshot for the configured TTL,
-  // which can leave request-time browser guards stale (for example evaluateEnabled).
-  const cfg = getRuntimeConfigSnapshot() ?? createConfigIO().loadConfig();
+  const cfg =
+    params.mode === "cached"
+      ? (getRuntimeConfigSnapshot() ?? createConfigIO().loadConfig())
+      : createConfigIO().loadConfig();
   const freshResolved = resolveBrowserConfig(cfg.browser, cfg);
   applyResolvedConfig(params.current, freshResolved);
 }

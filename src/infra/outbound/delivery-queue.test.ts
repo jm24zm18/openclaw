@@ -13,6 +13,7 @@ import {
   loadPendingDeliveries,
   MAX_RETRIES,
   moveToFailed,
+  preparePayloadsForDelivery,
   recoverPendingDeliveries,
 } from "./delivery-queue.js";
 
@@ -127,6 +128,124 @@ describe("delivery-queue", () => {
 
       expect(entries).toHaveLength(0);
       expect(fs.existsSync(path.join(queueDir, `${id}.delivered`))).toBe(false);
+    });
+
+    it("strips malformed leaked reply tags before persisting the queue entry", async () => {
+      const id = await enqueueDelivery(
+        {
+          channel: "telegram",
+          to: "99",
+          payloads: [{ text: "[[reply_to.tests.tests.tests.tests.tests.tests\nhello" }],
+        },
+        tmpDir,
+      );
+
+      const entry = JSON.parse(
+        fs.readFileSync(path.join(tmpDir, "delivery-queue", `${id}.json`), "utf-8"),
+      );
+      expect(entry.payloads).toEqual([{ text: "hello" }]);
+    });
+
+    it("collapses repeated dotted tokens before persisting the queue entry", async () => {
+      const id = await enqueueDelivery(
+        {
+          channel: "telegram",
+          to: "99",
+          payloads: [{ text: "tests.tests.tests.tests.tests.tests.tests.tests.tests" }],
+        },
+        tmpDir,
+      );
+
+      const entry = JSON.parse(
+        fs.readFileSync(path.join(tmpDir, "delivery-queue", `${id}.json`), "utf-8"),
+      );
+      expect(entry.payloads).toEqual([{ text: "tests" }]);
+    });
+
+    it("blocks low-entropy repeated test spam without persisting a queue entry", async () => {
+      const blockedText = Array.from({ length: 41 }, () => "tests").join(".");
+      const blockedId = await enqueueDelivery(
+        {
+          channel: "telegram",
+          to: "99",
+          payloads: [{ text: blockedText }],
+        },
+        tmpDir,
+      );
+
+      expect(fs.existsSync(path.join(tmpDir, "delivery-queue", `${blockedId}.json`))).toBe(false);
+    });
+
+    it("keeps valid reply_to_current tags intact", async () => {
+      const id = await enqueueDelivery(
+        {
+          channel: "telegram",
+          to: "99",
+          payloads: [{ text: "[[reply_to_current]] hello" }],
+        },
+        tmpDir,
+      );
+
+      const entry = JSON.parse(
+        fs.readFileSync(path.join(tmpDir, "delivery-queue", `${id}.json`), "utf-8"),
+      );
+      expect(entry.payloads).toEqual([{ text: "[[reply_to_current]] hello" }]);
+    });
+
+    it("stages local media into the queue area and cleans it up on ack", async () => {
+      const sourcePath = path.join(tmpDir, "source.png");
+      fs.writeFileSync(sourcePath, Buffer.from("png-data"));
+
+      const stagedPayloads = await preparePayloadsForDelivery([{ mediaUrl: sourcePath }], tmpDir);
+      const stagedPath = stagedPayloads[0]?.mediaUrl;
+      expect(stagedPath).toContain(path.join(tmpDir, "delivery-queue", "media"));
+      expect(fs.existsSync(stagedPath!)).toBe(true);
+
+      const id = await enqueueDelivery(
+        {
+          channel: "telegram",
+          to: "99",
+          payloads: stagedPayloads,
+        },
+        tmpDir,
+      );
+
+      await ackDelivery(id, tmpDir);
+      expect(fs.existsSync(stagedPath!)).toBe(false);
+    });
+
+    it("fails with structured media_missing_local_file when a local media path is missing", async () => {
+      await expect(
+        preparePayloadsForDelivery([{ mediaUrl: path.join(tmpDir, "missing.png") }], tmpDir),
+      ).rejects.toMatchObject({
+        name: "MediaDeliveryPreparationError",
+        code: "media_missing_local_file",
+        details: expect.objectContaining({
+          producingSubsystem: "outbound-delivery",
+          sourceType: "local_file",
+        }),
+      });
+    });
+
+    it("fails with structured media_fetch_failed when remote media fetch returns 404", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(
+        async () => new Response("not found", { status: 404, statusText: "Not Found" }),
+      ) as typeof globalThis.fetch;
+      try {
+        await expect(
+          preparePayloadsForDelivery([{ mediaUrl: "https://example.test/missing.png" }], tmpDir),
+        ).rejects.toMatchObject({
+          name: "MediaDeliveryPreparationError",
+          code: "media_fetch_failed",
+          details: expect.objectContaining({
+            producingSubsystem: "outbound-delivery",
+            sourceType: "fetched_remote_media",
+          }),
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     });
   });
 

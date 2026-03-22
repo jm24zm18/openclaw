@@ -12,9 +12,37 @@ export type BrowserProfileConfig = {
   /** Profile color (hex). Auto-assigned at creation. */
   color: string;
 };
+
+export type BrowserIdentityWindowSize = {
+  width: number;
+  height: number;
+};
+
+export type BrowserIdentityConfig = {
+  /** Browser identity mode for managed launches. */
+  mode?: "default" | "custom" | "stealth";
+  /** Explicit user agent override for managed browser tabs. */
+  userAgent?: string;
+  /** Explicit locale override for managed browser tabs. */
+  locale?: string;
+  /** Explicit timezone override for managed browser tabs. */
+  timezoneId?: string;
+  /** Explicit Accept-Language override for managed launches/tabs. */
+  acceptLanguage?: string;
+  /** Explicit window size override for managed browser launches. */
+  windowSize?: BrowserIdentityWindowSize;
+};
 export type BrowserSnapshotDefaults = {
   /** Default snapshot mode (applies when mode is not provided). */
   mode?: "efficient";
+};
+export type BrowserTabPolicyConfig = {
+  /**
+   * Managed browsing mode:
+   * - single: keep one active page by default and navigate in place
+   * - multi: allow multiple active pages/tabs
+   */
+  mode?: "single" | "multi";
 };
 export type BrowserSsrFPolicyConfig = {
   /** Legacy alias for private-network access. Prefer dangerouslyAllowPrivateNetwork. */
@@ -60,8 +88,12 @@ export type BrowserConfig = {
   profiles?: Record<string, BrowserProfileConfig>;
   /** Default snapshot options (applied by the browser tool/CLI when unset). */
   snapshotDefaults?: BrowserSnapshotDefaults;
+  /** Managed-tab behavior policy. */
+  tabPolicy?: BrowserTabPolicyConfig;
   /** SSRF policy for browser navigation/open-tab operations. */
   ssrfPolicy?: BrowserSsrFPolicyConfig;
+  /** Managed-browser identity policy. */
+  identity?: BrowserIdentityConfig;
   /**
    * Additional Chrome launch arguments.
    * Useful for stealth flags, window size overrides, or custom user-agent strings.

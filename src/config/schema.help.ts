@@ -212,6 +212,10 @@ export const FIELD_HELP: Record<string, string> = {
     "Agent runtime configuration root covering defaults and explicit agent entries used for routing and execution context. Keep this section explicit so model/tool behavior stays predictable across multi-agent workflows.",
   "agents.defaults":
     "Shared default settings inherited by agents unless overridden per entry in agents.list. Use defaults to enforce consistent baseline behavior and reduce duplicated per-agent configuration.",
+  "agents.defaults.autonomy":
+    "Default execution autonomy policy for normal task flow. Use continue-until-blocked to keep agents moving until a real blocker exists.",
+  "agents.defaults.autonomy.mode":
+    'Execution autonomy mode: "continue-until-blocked" keeps work moving without checkpoint chatter, "phase-checkpoints" checks in after meaningful phases, and "ask-often" is the most interruptible mode.',
   "agents.list":
     "Explicit list of configured agents with IDs and optional overrides for model, tools, identity, and workspace. Keep IDs stable over time so bindings, approvals, and session routing remain deterministic.",
   "agents.list[].thinkingDefault":
@@ -260,6 +264,26 @@ export const FIELD_HELP: Record<string, string> = {
     "Starting local CDP port used for auto-allocated browser profile ports. Increase this when host-level port defaults conflict with other local services.",
   "browser.defaultProfile":
     "Default browser profile name selected when callers do not explicitly choose a profile. Use a stable low-privilege profile as the default to reduce accidental cross-context state use.",
+  "browser.tabPolicy":
+    "Managed-tab behavior policy for default browser opens. Prefer single-page mode for deterministic agent browsing and only opt into multi-page mode when a task explicitly needs fan-out tabs.",
+  "browser.tabPolicy.mode":
+    'Managed-tab mode. "single" keeps one active page and navigates in place by default; "multi" allows multiple open pages/tabs.',
+  "browser.identity":
+    "Managed-browser identity policy for explicit launch and tab-level overrides such as user agent, locale, timezone, and viewport. Prefer this over browser.extraArgs when you need stable, testable browser identity behavior.",
+  "browser.identity.mode":
+    'Managed-browser identity mode. Use "default" for standard launches, "custom" for explicit overrides, or "stealth" for experimental anti-detection patches on managed Chromium tabs.',
+  "browser.identity.userAgent":
+    "Explicit user-agent string applied to managed browser tabs through CDP emulation. Use realistic browser identifiers and prefer this supported path over ad hoc extraArgs.",
+  "browser.identity.locale":
+    "Explicit locale override for managed browser tabs. Use this when websites localize content or validation behavior based on navigator locale.",
+  "browser.identity.timezoneId":
+    "Explicit IANA timezone override for managed browser tabs. Use stable timezone IDs such as America/Los_Angeles when site behavior depends on local time interpretation.",
+  "browser.identity.acceptLanguage":
+    "Explicit Accept-Language header/browser language hint for managed launches and tabs. Keep this aligned with browser.identity.locale unless you intentionally need different values.",
+  "browser.identity.windowSize":
+    "Explicit managed-browser launch window size. Use this to make viewport-dependent layouts and anti-bot heuristics more deterministic than relying on browser.extraArgs.",
+  "browser.identity.windowSize.width": "Managed-browser launch window width in CSS pixels.",
+  "browser.identity.windowSize.height": "Managed-browser launch window height in CSS pixels.",
   "browser.profiles":
     "Named browser profile connection map used for explicit routing to CDP ports or URLs with optional metadata. Keep profile names consistent and avoid overlapping endpoint definitions.",
   "browser.profiles.*.cdpPort":
@@ -1174,6 +1198,8 @@ export const FIELD_HELP: Record<string, string> = {
     "Groups controls for inter-agent session exchanges, including loop prevention limits on reply chaining. Keep defaults unless you run advanced agent-to-agent automation with strict turn caps.",
   "session.agentToAgent.maxPingPongTurns":
     "Max reply-back turns between requester and target agents during agent-to-agent exchanges (0-5). Use lower values to hard-limit chatter loops and preserve predictable run completion.",
+  "session.agentToAgent.requireAnnounce":
+    "Require agent-to-agent sends to produce a visible announce-back message. When enabled, silent announce replies are treated as protocol failures and fall back to a runtime-generated acknowledgement instead of disappearing quietly.",
   "session.threadBindings":
     "Shared defaults for thread-bound session routing behavior across providers that support thread focus workflows. Configure global defaults here and override per channel only when behavior differs.",
   "session.threadBindings.enabled":

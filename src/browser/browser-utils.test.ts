@@ -235,6 +235,8 @@ describe("browser server-context listKnownProfileNames", () => {
           {
             profile: { ...openclaw, name: "stale-removed" },
             running: null,
+            managedTabs: new Map(),
+            pendingOpens: new Map(),
           },
         ],
       ]),

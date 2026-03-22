@@ -95,6 +95,13 @@ export function augmentBundledProviderCatalog(
           name: "gpt-5.4",
         }
       : undefined,
+    openAiCodexGpt54Template
+      ? {
+          ...openAiCodexGpt54Template,
+          id: "gpt-5.4-mini",
+          name: "gpt-5.4-mini",
+        }
+      : undefined,
     openAiCodexSparkTemplate
       ? {
           ...openAiCodexSparkTemplate,

@@ -4,7 +4,7 @@ import type { MockFn } from "../test-utils/vitest-mock-fn.js";
 export const connectOverCdpMock: MockFn = vi.fn();
 export const getChromeWebSocketUrlMock: MockFn = vi.fn();
 
-vi.mock("playwright-core", () => ({
+vi.mock("./automation.js", () => ({
   chromium: {
     connectOverCDP: (...args: unknown[]) => connectOverCdpMock(...args),
   },

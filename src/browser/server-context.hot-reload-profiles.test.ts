@@ -1,12 +1,7 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveBrowserConfig, resolveProfile } from "./config.js";
-import {
-  refreshResolvedBrowserConfigFromDisk,
-  resolveBrowserProfileWithHotReload,
-} from "./resolved-config-refresh.js";
-import type { BrowserServerState } from "./server-context.types.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let cfgProfiles: Record<string, { cdpPort?: number; cdpUrl?: string; color?: string }> = {};
+let runtimeSnapshot: ReturnType<typeof buildConfig> | null = null;
 
 // Simulate module-level cache behavior
 let cachedConfig: ReturnType<typeof buildConfig> | null = null;
@@ -30,7 +25,7 @@ vi.mock("../config/config.js", () => ({
       return buildConfig();
     },
   }),
-  getRuntimeConfigSnapshot: () => null,
+  getRuntimeConfigSnapshot: () => runtimeSnapshot,
   loadConfig: () => {
     // simulate stale loadConfig that doesn't see updates unless cache cleared
     if (!cachedConfig) {
@@ -41,19 +36,28 @@ vi.mock("../config/config.js", () => ({
   writeConfigFile: vi.fn(async () => {}),
 }));
 
+import type { BrowserServerState } from "./server-context.types.js";
+
+let resolveBrowserConfig: typeof import("./config.js").resolveBrowserConfig;
+let resolveProfile: typeof import("./config.js").resolveProfile;
+let refreshResolvedBrowserConfigFromDisk: typeof import("./resolved-config-refresh.js").refreshResolvedBrowserConfigFromDisk;
+let resolveBrowserProfileWithHotReload: typeof import("./resolved-config-refresh.js").resolveBrowserProfileWithHotReload;
+
 describe("server-context hot-reload profiles", () => {
   let loadConfig: typeof import("../config/config.js").loadConfig;
 
-  beforeAll(async () => {
-    ({ loadConfig } = await import("../config/config.js"));
-  });
-
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
     vi.clearAllMocks();
     cfgProfiles = {
       openclaw: { cdpPort: 18800, color: "#FF4500" },
     };
+    runtimeSnapshot = null;
     cachedConfig = null; // Clear simulated cache
+    ({ loadConfig } = await import("../config/config.js"));
+    ({ resolveBrowserConfig, resolveProfile } = await import("./config.js"));
+    ({ refreshResolvedBrowserConfigFromDisk, resolveBrowserProfileWithHotReload } =
+      await import("./resolved-config-refresh.js"));
   });
 
   it("forProfile hot-reloads newly added profiles from config", async () => {
@@ -185,6 +189,8 @@ describe("server-context hot-reload profiles", () => {
             profile: openclawProfile!,
             running: { pid: 123 } as never,
             lastTargetId: "tab-1",
+            managedTabs: new Map(),
+            pendingOpens: new Map(),
             reconcile: null,
           },
         ],
@@ -205,5 +211,33 @@ describe("server-context hot-reload profiles", () => {
     expect(runtime?.profile.cdpPort).toBe(19999);
     expect(runtime?.lastTargetId).toBeNull();
     expect(runtime?.reconcile?.reason).toContain("cdpPort");
+  });
+
+  it("uses runtime snapshot for cached mode and bypasses it for fresh mode", async () => {
+    runtimeSnapshot = buildConfig();
+    const cfg = loadConfig();
+    const resolved = resolveBrowserConfig(cfg.browser, cfg);
+    const state: BrowserServerState = {
+      server: null,
+      port: 18791,
+      resolved,
+      profiles: new Map(),
+    };
+
+    cfgProfiles.desktop = { cdpUrl: "http://127.0.0.1:9222", color: "#0066CC" };
+
+    refreshResolvedBrowserConfigFromDisk({
+      current: state,
+      refreshConfigFromDisk: true,
+      mode: "cached",
+    });
+    expect(state.resolved.profiles.desktop).toBeUndefined();
+
+    refreshResolvedBrowserConfigFromDisk({
+      current: state,
+      refreshConfigFromDisk: true,
+      mode: "fresh",
+    });
+    expect(state.resolved.profiles.desktop?.cdpUrl).toBe("http://127.0.0.1:9222");
   });
 });

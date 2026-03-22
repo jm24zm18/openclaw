@@ -219,6 +219,7 @@ export function buildAgentSystemPrompt(params: {
     channel: string;
   };
   memoryCitationsMode?: MemoryCitationsMode;
+  autonomyMode?: "continue-until-blocked" | "phase-checkpoints" | "ask-often";
 }) {
   const acpEnabled = params.acpEnabled !== false;
   const sandboxedRuntime = params.sandboxInfo?.enabled === true;
@@ -366,6 +367,7 @@ export function buildAgentSystemPrompt(params: {
   const messageChannelOptions = listDeliverableMessageChannels().join("|");
   const promptMode = params.promptMode ?? "full";
   const isMinimal = promptMode === "minimal" || promptMode === "none";
+  const autonomyMode = params.autonomyMode ?? "continue-until-blocked";
   const sandboxContainerWorkspace = params.sandboxInfo?.containerWorkspaceDir?.trim();
   const sanitizedWorkspaceDir = sanitizeForPromptLiteral(params.workspaceDir);
   const sanitizedSandboxContainerWorkspace = sandboxContainerWorkspace
@@ -445,6 +447,16 @@ export function buildAgentSystemPrompt(params: {
         ]
       : []),
     "Do not poll `subagents list` / `sessions_list` in a loop; only check status on-demand (for intervention, debugging, or when explicitly asked).",
+    "",
+    "## Execution",
+    autonomyMode === "continue-until-blocked"
+      ? "Default autonomy: continue until blocked. Complete the requested work end-to-end without asking after every phase."
+      : autonomyMode === "phase-checkpoints"
+        ? "Default autonomy: use phase checkpoints. Finish a meaningful phase before checking in."
+        : "Default autonomy: ask often. Check in before major next steps.",
+    "Ask before continuing only when you are blocked on missing user input, a destructive or costly side effect, safety-sensitive ambiguity, or an explicit user pause/stop.",
+    "Avoid permission-seeking filler like 'If you want, I'll continue' when the user already asked for an outcome.",
+    "For browser tasks, prefer a serial loop: keep one active page, navigate in place, extract, commit the result, then continue to the next item.",
     "",
     "## Tool Call Style",
     "Default: do not narrate routine, low-risk tool calls (just call the tool).",

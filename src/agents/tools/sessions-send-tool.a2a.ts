@@ -25,7 +25,18 @@ export async function runSessionsSendA2AFlow(params: {
   requesterChannel?: GatewayMessageChannel;
   roundOneReply?: string;
   waitRunId?: string;
-}) {
+  requireAnnounce?: boolean;
+}): Promise<{
+  status:
+    | "pending"
+    | "delivered"
+    | "skipped"
+    | "fallback_delivered"
+    | "delivery_failed"
+    | "protocol_error"
+    | "no_target";
+  mode: "announce";
+}> {
   const runContextId = params.waitRunId ?? "unknown";
   try {
     let primaryReply = params.roundOneReply;
@@ -48,7 +59,10 @@ export async function runSessionsSendA2AFlow(params: {
       }
     }
     if (!latestReply) {
-      return;
+      return {
+        status: params.requireAnnounce ? "protocol_error" : "skipped",
+        mode: "announce",
+      };
     }
 
     const announceTarget = await resolveAnnounceTarget({
@@ -107,6 +121,7 @@ export async function runSessionsSendA2AFlow(params: {
       originalMessage: params.message,
       roundOneReply: primaryReply,
       latestReply,
+      requireAnnounce: params.requireAnnounce,
     });
     const announceReply = await runAgentStep({
       sessionKey: params.targetSessionKey,
@@ -118,32 +133,88 @@ export async function runSessionsSendA2AFlow(params: {
       sourceChannel: params.requesterChannel,
       sourceTool: "sessions_send",
     });
-    if (announceTarget && announceReply && announceReply.trim() && !isAnnounceSkip(announceReply)) {
-      try {
-        await callGateway({
-          method: "send",
-          params: {
-            to: announceTarget.to,
-            message: announceReply.trim(),
-            channel: announceTarget.channel,
-            accountId: announceTarget.accountId,
-            idempotencyKey: crypto.randomUUID(),
-          },
-          timeoutMs: 10_000,
-        });
-      } catch (err) {
-        log.warn("sessions_send announce delivery failed", {
-          runId: runContextId,
-          channel: announceTarget.channel,
+    if (!announceTarget) {
+      return {
+        status: params.requireAnnounce ? "protocol_error" : "no_target",
+        mode: "announce",
+      };
+    }
+
+    const trimmedAnnounce = announceReply?.trim() || "";
+    const silentAnnounce = !trimmedAnnounce || isAnnounceSkip(trimmedAnnounce);
+    const fallbackAnnounce =
+      params.requireAnnounce && silentAnnounce
+        ? buildRequiredAnnounceFallback({
+            originalMessage: params.message,
+            latestReply,
+            roundOneReply: primaryReply,
+          })
+        : undefined;
+    const outboundMessage = !silentAnnounce
+      ? trimmedAnnounce
+      : fallbackAnnounce?.trim()
+        ? fallbackAnnounce.trim()
+        : "";
+
+    if (!outboundMessage) {
+      return {
+        status: silentAnnounce ? "skipped" : "protocol_error",
+        mode: "announce",
+      };
+    }
+
+    try {
+      await callGateway({
+        method: "send",
+        params: {
           to: announceTarget.to,
-          error: formatErrorMessage(err),
-        });
-      }
+          message: outboundMessage,
+          channel: announceTarget.channel,
+          accountId: announceTarget.accountId,
+          idempotencyKey: crypto.randomUUID(),
+        },
+        timeoutMs: 10_000,
+      });
+      return {
+        status: silentAnnounce ? "fallback_delivered" : "delivered",
+        mode: "announce",
+      };
+    } catch (err) {
+      log.warn("sessions_send announce delivery failed", {
+        runId: runContextId,
+        channel: announceTarget.channel,
+        to: announceTarget.to,
+        error: formatErrorMessage(err),
+        required: params.requireAnnounce === true,
+        fallbackUsed: Boolean(fallbackAnnounce),
+      });
+      return {
+        status: silentAnnounce && params.requireAnnounce ? "protocol_error" : "delivery_failed",
+        mode: "announce",
+      };
     }
   } catch (err) {
     log.warn("sessions_send announce flow failed", {
       runId: runContextId,
       error: formatErrorMessage(err),
     });
+    return {
+      status: params.requireAnnounce ? "protocol_error" : "delivery_failed",
+      mode: "announce",
+    };
   }
+}
+
+function buildRequiredAnnounceFallback(params: {
+  originalMessage: string;
+  latestReply?: string;
+  roundOneReply?: string;
+}): string {
+  const candidate = params.latestReply?.trim() || params.roundOneReply?.trim() || "";
+  if (candidate && !isAnnounceSkip(candidate)) {
+    return candidate;
+  }
+  const compact = params.originalMessage.replace(/\s+/g, " ").trim();
+  const preview = compact.length > 180 ? `${compact.slice(0, 177)}...` : compact;
+  return `Acknowledged. Received delegated work request: ${preview}`;
 }

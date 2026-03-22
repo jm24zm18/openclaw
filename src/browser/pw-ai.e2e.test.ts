@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-vi.mock("playwright-core", () => ({
+vi.mock("./automation.js", () => ({
   chromium: {
     connectOverCDP: vi.fn(),
   },
@@ -51,16 +51,16 @@ function createBrowser(pages: unknown[]) {
     contexts: () => [ctx],
     on: vi.fn(),
     close: vi.fn().mockResolvedValue(undefined),
-  } as unknown as import("playwright-core").Browser;
+  } as unknown as import("./automation.js").Browser;
 }
 
-let chromiumMock: typeof import("playwright-core").chromium;
+let chromiumMock: typeof import("./automation.js").chromium;
 let snapshotAiViaPlaywright: typeof import("./pw-tools-core.snapshot.js").snapshotAiViaPlaywright;
 let clickViaPlaywright: typeof import("./pw-tools-core.interactions.js").clickViaPlaywright;
 let closePlaywrightBrowserConnection: typeof import("./pw-session.js").closePlaywrightBrowserConnection;
 
 beforeAll(async () => {
-  const pw = await import("playwright-core");
+  const pw = await import("./automation.js");
   chromiumMock = pw.chromium;
   ({ snapshotAiViaPlaywright } = await import("./pw-tools-core.snapshot.js"));
   ({ clickViaPlaywright } = await import("./pw-tools-core.interactions.js"));
@@ -150,8 +150,10 @@ describe("pw-ai", () => {
     expect(p1.click).toHaveBeenCalledTimes(1);
   });
 
-  it("fails with a clear error when _snapshotForAI is missing", async () => {
+  it("falls back to role snapshots when _snapshotForAI is missing", async () => {
     const p1 = createPage({ targetId: "T1", hasSnapshotForAI: false });
+    const ariaSnapshot = vi.fn().mockResolvedValue('- button "Fallback"');
+    p1.locator.mockReturnValue({ ariaSnapshot });
     const browser = createBrowser([p1.page]);
     (chromiumMock.connectOverCDP as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(browser);
 
@@ -160,7 +162,12 @@ describe("pw-ai", () => {
         cdpUrl: "http://127.0.0.1:18792",
         targetId: "T1",
       }),
-    ).rejects.toThrow(/_snapshotForAI/i);
+    ).resolves.toMatchObject({
+      snapshot: expect.stringContaining('button "Fallback"'),
+      refs: {
+        e1: { role: "button", name: "Fallback" },
+      },
+    });
   });
 
   it("reuses the CDP connection for repeated calls", async () => {

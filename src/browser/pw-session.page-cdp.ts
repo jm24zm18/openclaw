@@ -1,4 +1,4 @@
-import type { CDPSession, Page } from "playwright-core";
+import type { CDPSession, Page } from "./automation.js";
 
 type PageCdpSend = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
 

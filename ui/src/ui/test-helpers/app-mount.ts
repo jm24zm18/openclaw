@@ -20,6 +20,23 @@ class MockWebSocket {
   send() {}
 }
 
+function createMatchMediaResult(query: string): MediaQueryList {
+  const matches =
+    query.includes("(max-width: 768px)") || query.includes("(prefers-color-scheme: light)");
+  return {
+    matches,
+    media: query,
+    onchange: null,
+    addListener() {},
+    removeListener() {},
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {
+      return false;
+    },
+  } as MediaQueryList;
+}
+
 export function mountApp(pathname: string) {
   window.history.replaceState({}, "", pathname);
   const app = document.createElement("openclaw-app") as OpenClawApp;
@@ -37,6 +54,7 @@ export function registerAppMountHooks() {
     document.body.innerHTML = "";
     await i18n.setLocale("en");
     vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
+    vi.stubGlobal("matchMedia", (query: string) => createMatchMediaResult(query));
     vi.stubGlobal(
       "fetch",
       vi.fn(() => new Promise<Response>(() => undefined)) as unknown as typeof fetch,

@@ -86,6 +86,7 @@ export async function noteChromeMcpBrowserReadiness(
         `- Verify the matching Chromium-based browser is version ${CHROME_MCP_MIN_MAJOR}+ on the same host as the Gateway or node.`,
         `- Enable remote debugging in that browser's inspect page (${REMOTE_DEBUGGING_PAGES}).`,
         "- Keep the browser running and accept the attach consent prompt the first time OpenClaw connects.",
+        "- Firefox may be installed on this host, but OpenClaw browser control currently uses Chromium/Chrome paths only.",
       ].join("\n"),
       "Browser",
     );
@@ -103,6 +104,7 @@ export async function noteChromeMcpBrowserReadiness(
       `- Enable remote debugging in the browser inspect page (${REMOTE_DEBUGGING_PAGES}).`,
       "- Keep the browser running and accept the attach consent prompt the first time OpenClaw connects.",
       "- Docker, headless, and sandbox browser flows stay on raw CDP; this check only applies to host-local Chrome MCP attach.",
+      "- Firefox may be installed on this host, but OpenClaw browser control currently uses Chromium/Chrome paths only.",
     ];
     if (explicitProfiles.length > 0) {
       lines.push(
@@ -137,6 +139,9 @@ export async function noteChromeMcpBrowserReadiness(
   lines.push(`- Enable remote debugging in the browser inspect page (${REMOTE_DEBUGGING_PAGES}).`);
   lines.push(
     "- Keep the browser running and accept the attach consent prompt the first time OpenClaw connects.",
+  );
+  lines.push(
+    "- Firefox may be installed on this host, but OpenClaw browser control currently uses Chromium/Chrome paths only.",
   );
   if (explicitProfiles.length > 0) {
     lines.push(

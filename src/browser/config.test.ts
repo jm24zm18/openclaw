@@ -229,6 +229,54 @@ describe("browser config", () => {
     expect(resolved.extraArgs).toEqual([]);
   });
 
+  it("defaults browser identity to default mode when not provided", () => {
+    const resolved = resolveBrowserConfig({});
+    expect(resolved.identity).toEqual({ mode: "default" });
+    expect(resolved.tabPolicy).toEqual({ mode: "single" });
+  });
+
+  it("allows opting into multi-page tab policy", () => {
+    const resolved = resolveBrowserConfig({
+      tabPolicy: {
+        mode: "multi",
+      },
+    });
+    expect(resolved.tabPolicy).toEqual({ mode: "multi" });
+  });
+
+  it("derives custom browser identity mode when explicit overrides are configured", () => {
+    const resolved = resolveBrowserConfig({
+      identity: {
+        userAgent: "Mozilla/5.0",
+        locale: "en-US",
+        timezoneId: "America/Los_Angeles",
+        acceptLanguage: "en-US,en",
+        windowSize: { width: 1440, height: 900 },
+      },
+    });
+    expect(resolved.identity).toEqual({
+      mode: "custom",
+      userAgent: "Mozilla/5.0",
+      locale: "en-US",
+      timezoneId: "America/Los_Angeles",
+      acceptLanguage: "en-US,en",
+      windowSize: { width: 1440, height: 900 },
+    });
+  });
+
+  it("preserves explicit stealth identity mode", () => {
+    const resolved = resolveBrowserConfig({
+      identity: {
+        mode: "stealth",
+        windowSize: { width: 1920, height: 1080 },
+      },
+    });
+    expect(resolved.identity).toEqual({
+      mode: "stealth",
+      windowSize: { width: 1920, height: 1080 },
+    });
+  });
+
   it("resolves browser SSRF policy when configured", () => {
     const resolved = resolveBrowserConfig({
       ssrfPolicy: {

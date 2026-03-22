@@ -155,6 +155,49 @@ describe("browser server-context remote profile tab operations", () => {
     await expect(remote.ensureTabAvailable("STALE_TARGET")).rejects.toThrow(/tab not found/i);
   });
 
+  it("rebinds a stale target to a single same-url replacement tab", async () => {
+    const responses = [
+      [{ targetId: "T2", title: "Tab 2", url: "https://example.com/p/1", type: "page" }],
+      [{ targetId: "T2", title: "Tab 2", url: "https://example.com/p/1", type: "page" }],
+    ];
+    const listPagesViaPlaywright = vi.fn(createSequentialPageLister(responses));
+
+    vi.spyOn(pwAiModule, "getPwAiModule").mockResolvedValue({
+      listPagesViaPlaywright,
+    } as unknown as Awaited<ReturnType<typeof pwAiModule.getPwAiModule>>);
+
+    const { state, remote } = createRemoteRouteHarness();
+    state.profiles.set("remote", {
+      profile: remote.profile,
+      running: null,
+      lastTargetId: "T1",
+      managedTabs: new Map([
+        [
+          "T1",
+          {
+            profile: "remote",
+            driver: "openclaw",
+            requestedUrl: "https://example.com/p/1",
+            currentUrl: "https://example.com/p/1",
+            targetId: "T1",
+            previousTargetIds: [],
+            openedAt: Date.now(),
+            lastUsedAt: Date.now(),
+            lifecycleState: "ready",
+            domain: "example.com",
+          },
+        ],
+      ]),
+      pendingOpens: new Map(),
+      reconcile: null,
+    });
+
+    const rebound = await remote.ensureTabAvailable("T1");
+    expect(rebound.targetId).toBe("T2");
+    expect(rebound.lifecycleState).toBe("recovering");
+    expect(rebound.failureClass).toBe("target_replaced");
+  });
+
   it("keeps rejecting stale targetId for remote profiles when multiple tabs exist", async () => {
     const responses = [
       [
@@ -174,6 +217,52 @@ describe("browser server-context remote profile tab operations", () => {
 
     const { remote } = createRemoteRouteHarness();
     await expect(remote.ensureTabAvailable("STALE_TARGET")).rejects.toThrow(/tab not found/i);
+  });
+
+  it("fails closed when stale target recovery has multiple same-domain matches", async () => {
+    const responses = [
+      [
+        { targetId: "T2", title: "Tab 2", url: "https://example.com/a", type: "page" },
+        { targetId: "T3", title: "Tab 3", url: "https://example.com/b", type: "page" },
+      ],
+      [
+        { targetId: "T2", title: "Tab 2", url: "https://example.com/a", type: "page" },
+        { targetId: "T3", title: "Tab 3", url: "https://example.com/b", type: "page" },
+      ],
+    ];
+    const listPagesViaPlaywright = vi.fn(createSequentialPageLister(responses));
+
+    vi.spyOn(pwAiModule, "getPwAiModule").mockResolvedValue({
+      listPagesViaPlaywright,
+    } as unknown as Awaited<ReturnType<typeof pwAiModule.getPwAiModule>>);
+
+    const { state, remote } = createRemoteRouteHarness();
+    state.profiles.set("remote", {
+      profile: remote.profile,
+      running: null,
+      lastTargetId: "T1",
+      managedTabs: new Map([
+        [
+          "T1",
+          {
+            profile: "remote",
+            driver: "openclaw",
+            requestedUrl: "https://example.com/old",
+            currentUrl: "https://example.com/old",
+            targetId: "T1",
+            previousTargetIds: [],
+            openedAt: Date.now(),
+            lastUsedAt: Date.now(),
+            lifecycleState: "ready",
+            domain: "example.com",
+          },
+        ],
+      ]),
+      pendingOpens: new Map(),
+      reconcile: null,
+    });
+
+    await expect(remote.ensureTabAvailable("T1")).rejects.toThrow(/ambiguous target recovery/i);
   });
 
   it("uses Playwright focus for remote profiles when available", async () => {

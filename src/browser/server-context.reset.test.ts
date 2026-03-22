@@ -1,8 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProfileResetOps } from "./server-context.reset.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const trashMocks = vi.hoisted(() => ({
   movePathToTrash: vi.fn(async (from: string) => `${from}.trashed`),
@@ -14,6 +13,13 @@ const pwAiMocks = vi.hoisted(() => ({
 
 vi.mock("./trash.js", () => trashMocks);
 vi.mock("./pw-ai.js", () => pwAiMocks);
+
+let createProfileResetOps: typeof import("./server-context.reset.js").createProfileResetOps;
+
+beforeEach(async () => {
+  vi.resetModules();
+  ({ createProfileResetOps } = await import("./server-context.reset.js"));
+});
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -41,7 +47,12 @@ function createLocalOpenClawResetOps(
 function createStatelessResetOps(profile: Parameters<typeof createProfileResetOps>[0]["profile"]) {
   return createProfileResetOps({
     profile,
-    getProfileState: () => ({ profile: {} as never, running: null }),
+    getProfileState: () => ({
+      profile: {} as never,
+      running: null,
+      managedTabs: new Map(),
+      pendingOpens: new Map(),
+    }),
     stopRunningBrowser: vi.fn(async () => ({ stopped: false })),
     isHttpReachable: vi.fn(async () => false),
     resolveOpenClawUserDataDir: (name: string) => `/tmp/${name}`,
@@ -73,6 +84,8 @@ describe("createProfileResetOps", () => {
     const getProfileState = vi.fn(() => ({
       profile: {} as never,
       running: { pid: 1 } as never,
+      managedTabs: new Map(),
+      pendingOpens: new Map(),
     }));
 
     const ops = createLocalOpenClawResetOps({
@@ -82,12 +95,11 @@ describe("createProfileResetOps", () => {
       resolveOpenClawUserDataDir: () => profileDir,
     });
 
+    const mockedTrashDestination = `${profileDir}.trashed`;
     const result = await ops.resetProfile();
-    expect(result).toEqual({
-      moved: true,
-      from: profileDir,
-      to: `${profileDir}.trashed`,
-    });
+    expect(result.moved).toBe(true);
+    expect(result.from).toBe(profileDir);
+    expect(result.to).toBe(mockedTrashDestination);
     expect(isHttpReachable).toHaveBeenCalledWith(300);
     expect(stopRunningBrowser).toHaveBeenCalledTimes(1);
     expect(pwAiMocks.closePlaywrightBrowserConnection).toHaveBeenCalledWith({
@@ -103,7 +115,12 @@ describe("createProfileResetOps", () => {
 
     const stopRunningBrowser = vi.fn(async () => ({ stopped: false }));
     const ops = createLocalOpenClawResetOps({
-      getProfileState: () => ({ profile: {} as never, running: null }),
+      getProfileState: () => ({
+        profile: {} as never,
+        running: null,
+        managedTabs: new Map(),
+        pendingOpens: new Map(),
+      }),
       stopRunningBrowser,
       isHttpReachable: vi.fn(async () => true),
       resolveOpenClawUserDataDir: () => profileDir,
