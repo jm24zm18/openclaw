@@ -2,7 +2,7 @@ import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/diffs";
-import { chromium } from "playwright-core";
+import { chromium } from "patchright";
 import type { DiffRenderOptions, DiffTheme } from "./types.js";
 import { VIEWER_ASSET_PREFIX, getServedViewerAsset } from "./viewer-assets.js";
 
@@ -44,7 +44,7 @@ type ExecutablePathCache = {
 let sharedBrowserState: SharedBrowserState | null = null;
 let executablePathCache: ExecutablePathCache | null = null;
 
-export class PlaywrightDiffScreenshotter implements DiffScreenshotter {
+export class PatchrightDiffScreenshotter implements DiffScreenshotter {
   private readonly config: OpenClawConfig;
   private readonly browserIdleMs: number;
 

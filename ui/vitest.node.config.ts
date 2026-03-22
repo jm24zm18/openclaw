@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-// Node-only tests for pure logic (no Playwright/browser dependency).
+// Node-only tests for pure logic (no Patchright/browser dependency).
 export default defineConfig({
   test: {
     testTimeout: 120_000,

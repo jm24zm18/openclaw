@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { Static, Type } from "@sinclair/typebox";
 import type { AnyAgentTool, OpenClawPluginApi, OpenClawPluginToolContext } from "../api.js";
-import { PlaywrightDiffScreenshotter, type DiffScreenshotter } from "./browser.js";
+import { PatchrightDiffScreenshotter, type DiffScreenshotter } from "./browser.js";
 import { resolveDiffImageRenderOptions } from "./config.js";
 import { renderDiffDocument } from "./render.js";
 import type { DiffArtifactStore } from "./store.js";
@@ -176,7 +176,7 @@ export function createDiffsTool(params: {
       });
 
       const screenshotter =
-        params.screenshotter ?? new PlaywrightDiffScreenshotter({ config: params.api.config });
+        params.screenshotter ?? new PatchrightDiffScreenshotter({ config: params.api.config });
 
       if (isArtifactOnlyMode(mode)) {
         const artifactFile = await renderDiffArtifactFile({

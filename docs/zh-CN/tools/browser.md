@@ -310,15 +310,15 @@ openclaw browser create-profile \
 
 某些功能（navigate/act/AI 快照/角色快照、元素截图、PDF）需要 Playwright。如果未安装 Playwright，这些端点会返回明确的 501 错误。ARIA 快照和基本截图对于 openclaw 托管的 Chrome 仍然有效。对于 Chrome 扩展中继驱动程序，ARIA 快照和截图需要 Playwright。
 
-如果你看到 `Playwright is not available in this gateway build`，请安装完整的 Playwright 包（不是 `playwright-core`）并重启 Gateway 网关，或者重新安装带浏览器支持的 OpenClaw。
+如果你看到 `Patchright is not available in this gateway build`，请安装完整的 Patchright 包（不是 `patchright-core`）并重启 Gateway 网关，或者重新安装带浏览器支持的 OpenClaw。
 
 #### Docker Playwright 安装
 
-如果你的 Gateway 网关在 Docker 中运行，避免使用 `npx playwright`（npm 覆盖冲突）。改用捆绑的 CLI：
+如果你的 Gateway 网关在 Docker 中运行，避免使用 `npx patchright`（npm 覆盖冲突）。改用捆绑的 CLI：
 
 ```bash
 docker compose run --rm openclaw-cli \
-  node /app/node_modules/playwright-core/cli.js install chromium
+  node /app/node_modules/patchright/cli.js install chromium
 ```
 
 要持久化浏览器下载，设置 `PLAYWRIGHT_BROWSERS_PATH`（例如 `/home/node/.cache/ms-playwright`）并确保 `/home/node` 通过 `OPENCLAW_HOME_VOLUME` 或绑定挂载持久化。参见 [Docker](/install/docker)。

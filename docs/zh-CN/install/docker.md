@@ -183,7 +183,7 @@ export OPENCLAW_DOCKER_APT_PACKAGES="git curl jq"
 
 ```bash
 docker compose run --rm openclaw-cli \
-  node /app/node_modules/playwright-core/cli.js install chromium
+  node /app/node_modules/patchright/cli.js install chromium
 ```
 
 如果你需要 Playwright 安装系统依赖，使用 `OPENCLAW_DOCKER_APT_PACKAGES` 重建镜像，而不是在运行时使用 `--with-deps`。

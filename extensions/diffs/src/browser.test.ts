@@ -8,13 +8,13 @@ const { launchMock } = vi.hoisted(() => ({
   launchMock: vi.fn(),
 }));
 
-vi.mock("../../../src/browser/automation.js", () => ({
+vi.mock("patchright", () => ({
   chromium: {
     launch: launchMock,
   },
 }));
 
-describe("PlaywrightDiffScreenshotter", () => {
+describe("PatchrightDiffScreenshotter", () => {
   let rootDir: string;
   let outputPath: string;
   let cleanupRootDir: () => Promise<void>;
@@ -131,9 +131,9 @@ describe("PlaywrightDiffScreenshotter", () => {
       boundingBox: { x: 40, y: 40, width: 960, height: 60_000 },
     });
     launchMock.mockResolvedValue(browser);
-    const { PlaywrightDiffScreenshotter } = await import("./browser.js");
+    const { PatchrightDiffScreenshotter } = await import("./browser.js");
 
-    const screenshotter = new PlaywrightDiffScreenshotter({
+    const screenshotter = new PatchrightDiffScreenshotter({
       config: createConfig(),
       browserIdleMs: 1_000,
     });
@@ -200,8 +200,8 @@ async function createScreenshotterHarness(options?: {
   }> = [];
   const browser = createMockBrowser(pages, options);
   launchMock.mockResolvedValue(browser);
-  const { PlaywrightDiffScreenshotter } = await import("./browser.js");
-  const screenshotter = new PlaywrightDiffScreenshotter({
+  const { PatchrightDiffScreenshotter } = await import("./browser.js");
+  const screenshotter = new PatchrightDiffScreenshotter({
     config: createConfig(),
     browserIdleMs: 1_000,
   });

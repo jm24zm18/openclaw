@@ -456,17 +456,17 @@ Playwright. If Playwright isn’t installed, those endpoints return a clear 501
 error. ARIA snapshots and basic screenshots still work for openclaw-managed Chrome.
 
 If you see `Playwright is not available in this gateway build`, install the full
-Playwright package (not `playwright-core`) and restart the gateway, or reinstall
+Patchright package (not `patchright-core`) and restart the gateway, or reinstall
 OpenClaw with browser support.
 
 #### Docker Playwright install
 
-If your Gateway runs in Docker, avoid `npx playwright` (npm override conflicts).
+If your Gateway runs in Docker, avoid `npx patchright` (npm override conflicts).
 Use the bundled CLI instead:
 
 ```bash
 docker compose run --rm openclaw-cli \
-  node /app/node_modules/playwright-core/cli.js install chromium
+  node /app/node_modules/patchright/cli.js install chromium
 ```
 
 To persist browser downloads, set `PLAYWRIGHT_BROWSERS_PATH` (for example,

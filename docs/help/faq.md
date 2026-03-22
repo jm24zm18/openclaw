@@ -1115,7 +1115,7 @@ Quick answers plus deeper troubleshooting for real-world setups (local dev, VPS,
     - Persist `/home/node` with `OPENCLAW_HOME_VOLUME` so caches survive.
     - Bake system deps into the image with `OPENCLAW_DOCKER_APT_PACKAGES`.
     - Install Playwright browsers via the bundled CLI:
-      `node /app/node_modules/playwright-core/cli.js install chromium`
+      `node /app/node_modules/patchright/cli.js install chromium`
     - Set `PLAYWRIGHT_BROWSERS_PATH` and ensure the path is persisted.
 
     Docs: [Docker](/install/docker), [Browser](/tools/browser).

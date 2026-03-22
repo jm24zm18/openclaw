@@ -257,7 +257,7 @@ See the [`ClawDock` Helper README](https://github.com/openclaw/openclaw/blob/mai
     3. **Install Playwright browsers**:
        ```bash
        docker compose run --rm openclaw-cli \
-         node /app/node_modules/playwright-core/cli.js install chromium
+         node /app/node_modules/patchright/cli.js install chromium
        ```
     4. **Persist browser downloads**: set
        `PLAYWRIGHT_BROWSERS_PATH=/home/node/.cache/ms-playwright` and use
